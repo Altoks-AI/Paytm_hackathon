@@ -10,7 +10,7 @@ import { createCampaign } from "../actions";
 type T = { id: string; name: string; language: string; body: string; variables: string[] };
 type L = { id: string; name: string | null; phone: string | null; status: string; tags: string[] };
 
-export function CampaignForm({ templates, leads }: { templates: T[]; leads: L[] }) {
+export function CampaignForm({ templates, leads, senders }: { templates: T[]; leads: L[]; senders: { id: string; label: string }[] }) {
   const [state, action, pending] = useActionState(createCampaign, undefined);
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
   const [custom, setCustom] = useState<Record<string, string>>({});
@@ -41,6 +41,13 @@ export function CampaignForm({ templates, leads }: { templates: T[]; leads: L[] 
           <div>
             <Label>Campaign name</Label>
             <Input name="name" placeholder="Diwali offer – Nov" required />
+          </div>
+          <div>
+            <Label hint="the agent's WhatsApp number">Send from</Label>
+            <Select name="agentId" defaultValue={senders[0]?.id ?? ""}>
+              {senders.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              {!senders.length && <option value="">Default number</option>}
+            </Select>
           </div>
           <div>
             <Label hint="approved only">Template</Label>

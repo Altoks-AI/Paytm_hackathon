@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, campaignRecipients, leads, waTemplates } from "@/db/schema";
 import { sendWhatsAppTemplate } from "@/lib/whatsapp";
+import { getAgent } from "@/lib/agents";
 import { resolveParams } from "@/lib/wa-templates";
 import { addCredits, chargeCredits, CREDIT_COSTS } from "@/lib/credits";
 
@@ -32,6 +33,7 @@ export async function runCampaign(tenantId: string, campaignId: string) {
     if (!c?.templateId) throw new Error("Campaign or template not found");
     const [t] = await db.select().from(waTemplates).where(and(eq(waTemplates.id, c.templateId), eq(waTemplates.tenantId, tenantId)));
     if (!t) throw new Error("Template not found");
+    const fromId = c.agentId ? (await getAgent(tenantId, c.agentId))?.whatsappPhoneNumberId : null;
     await db.update(campaigns).set({ status: "running" }).where(eq(campaigns.id, c.id));
 
     for (;;) {
@@ -50,7 +52,7 @@ export async function runCampaign(tenantId: string, campaignId: string) {
             else if (!(await chargeCredits(tenantId, "whatsapp_template", { note: c.name }))) res = { error: "Out of credits" };
             else {
               try {
-                res = await sendWhatsAppTemplate(tenantId, r.phone, { name: t.name, language: t.language, bodyParams: resolveParams(t.variables, r, c.customValues) });
+                res = await sendWhatsAppTemplate(tenantId, r.phone, { name: t.name, language: t.language, bodyParams: resolveParams(t.variables, r, c.customValues) }, fromId);
               } catch (e) {
                 res = { error: (e as Error).message || "Send failed" };
               }

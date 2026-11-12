@@ -50,9 +50,20 @@ export async function findAgentByPhone(phone: string): Promise<Agent | null> {
   return a ?? null;
 }
 
-/** The agent that answers the tenant's WhatsApp number. */
+/** Agent that owns a WhatsApp number (Meta phone number ID). */
+export async function findAgentByWhatsAppId(phoneNumberId: string): Promise<Agent | null> {
+  const [a] = await db.select().from(agents).where(eq(agents.whatsappPhoneNumberId, phoneNumberId));
+  return a ?? null;
+}
+
+/** Fallback for a WhatsApp number no agent owns: the first WhatsApp-enabled agent without a number of its own. */
 export async function whatsappAgent(tenantId: string): Promise<Agent | null> {
   await ensureAgents(tenantId);
-  const [a] = await db.select().from(agents).where(and(eq(agents.tenantId, tenantId), eq(agents.whatsappEnabled, true))).orderBy(asc(agents.createdAt)).limit(1);
+  const [a] = await db
+    .select()
+    .from(agents)
+    .where(and(eq(agents.tenantId, tenantId), eq(agents.whatsappEnabled, true), isNull(agents.whatsappPhoneNumberId)))
+    .orderBy(asc(agents.createdAt))
+    .limit(1);
   return a ?? null;
 }

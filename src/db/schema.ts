@@ -93,7 +93,9 @@ export const agents = pgTable("agents", {
   disabledTools: jsonb("disabled_tools").$type<string[]>().notNull().default([]), // built-in tool names switched off (see BUILTIN_TOOLS)
   voice: text("voice").notNull().default("kavitha_te_conversation"), // Sarvam TTS speaker
   greeting: text("greeting").notNull().default("Hi! How can I help you today?"),
-  whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false), // at most one agent per tenant answers WhatsApp
+  whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),
+  whatsappPhoneNumberId: text("whatsapp_phone_number_id").unique(), // WhatsApp number (Meta phone number ID) assigned to this agent
+  whatsappNumber: text("whatsapp_number"), // display form of that number
   voiceEnabled: boolean("voice_enabled").notNull().default(false),
   chatbotEnabled: boolean("chatbot_enabled").notNull().default(false),
   phoneNumber: text("phone_number").unique(), // Twilio number (E.164) assigned to this agent: inbound calls to it reach this agent, outbound calls come from it

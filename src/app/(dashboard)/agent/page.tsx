@@ -6,6 +6,7 @@ import { integrations, knowledgeItems, type Agent } from "@/db/schema";
 import { appUrl, requireTenant } from "@/lib/tenant";
 import { listAgents } from "@/lib/agents";
 import { listTwilioNumbers } from "@/lib/voice/numbers";
+import { listWhatsAppNumbers } from "@/lib/whatsapp-numbers";
 import { BUILTIN_TOOLS, TOOL_METHODS, headerNames, listCustomTools } from "@/lib/agent/custom-tools";
 import { Badge, Card, Empty, Input, Label, PageHeader, Select, Textarea, Toggle } from "@/components/ui";
 import {
@@ -254,13 +255,14 @@ async function Knowledge({ tenantId, agentId }: { tenantId: string; agentId: str
 }
 
 async function Channels({ tenantId, s, others }: { tenantId: string; s: Settings; others: Settings[] }) {
-  const [conns, { numbers, error }] = await Promise.all([
+  const [conns, { numbers, error }, wa] = await Promise.all([
     db.select({ provider: integrations.provider }).from(integrations).where(and(eq(integrations.tenantId, tenantId), eq(integrations.enabled, true))),
     listTwilioNumbers(tenantId),
+    listWhatsAppNumbers(tenantId),
   ]);
   const connected = new Set(conns.map((c) => c.provider));
   const owner = new Map(others.filter((a) => a.phoneNumber).map((a) => [a.phoneNumber as string, a.agentName]));
-  const waOwner = others.find((a) => a.whatsappEnabled);
+  const waOwner = new Map(others.filter((a) => a.whatsappPhoneNumberId).map((a) => [a.whatsappPhoneNumberId as string, a.agentName]));
   return (
     <Section title="Channels" description="Where this agent is live. Each phone number belongs to one agent: inbound calls to it reach this agent, and its outbound calls come from it.">
       <ActionForm action={saveChannels}>
@@ -288,8 +290,31 @@ async function Channels({ tenantId, s, others }: { tenantId: string; s: Settings
           {error && <p className="mt-1 text-xs text-amber-700">Could not list numbers from Twilio: {error}</p>}
           <p className="mt-1 text-xs text-zinc-500">The number&apos;s incoming-call webhook is pointed at this app automatically when you save.</p>
         </div>
+        <div className="max-w-md">
+          <Label hint="from your WhatsApp Business Account">WhatsApp number</Label>
+          {connected.has("meta_whatsapp") ? (
+            <Select name="whatsappPhoneNumberId" defaultValue={s.whatsappPhoneNumberId ?? ""}>
+              <option value="">No number assigned</option>
+              {wa.numbers.map((n) => {
+                const by = waOwner.get(n.id);
+                return (
+                  <option key={n.id} value={n.id} disabled={!!by}>
+                    {n.display}
+                    {n.name ? ` · ${n.name}` : ""}
+                    {by ? ` (used by ${by})` : ""}
+                  </option>
+                );
+              })}
+            </Select>
+          ) : (
+            <p className="text-sm text-amber-700">
+              WhatsApp is not connected. <Link href="/integrations" className="underline">Connect it in Integrations</Link> to assign a number.
+            </p>
+          )}
+          {wa.error && <p className="mt-1 text-xs text-amber-700">Could not list numbers from WhatsApp: {wa.error}</p>}
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <ToggleRow name="whatsappEnabled" label="WhatsApp" desc={waOwner ? `Currently answered by "${waOwner.agentName}". Turning this on moves WhatsApp to this agent.` : "Reply to inbound WhatsApp messages"} checked={s.whatsappEnabled} missing={connected.has("meta_whatsapp") ? undefined : "Meta WhatsApp"} />
+          <ToggleRow name="whatsappEnabled" label="WhatsApp" desc="Reply to messages on this agent's WhatsApp number" checked={s.whatsappEnabled} missing={connected.has("meta_whatsapp") ? undefined : "Meta WhatsApp"} />
           <ToggleRow name="voiceEnabled" label="Voice calls" desc="Answer and place phone calls" checked={s.voiceEnabled} missing={connected.has("twilio") ? undefined : "Twilio"} />
           <ToggleRow name="chatbotEnabled" label="Website chatbot" desc="Embeddable chat widget" checked={s.chatbotEnabled} />
         </div>

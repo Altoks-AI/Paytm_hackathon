@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { campaigns, campaignRecipients, leads, waTemplates } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
+import { getAgent } from "@/lib/agents";
 import { isUuid } from "@/lib/leads";
 import { customLabels } from "@/lib/wa-templates";
 import { isCampaignRunning, recipientCounts, runCampaign } from "@/lib/wa-campaigns";
@@ -45,7 +46,7 @@ export async function createCampaign(_: FormState, fd: FormData): Promise<FormSt
   if (!leadIds.length) return { error: audience === "all" ? "You have no leads with a phone number yet" : "Select at least one lead" };
 
   const id = await db.transaction(async (tx) => {
-    const [c] = await tx.insert(campaigns).values({ tenantId, type: "whatsapp", name, templateId: t.id, customValues, audience }).returning({ id: campaigns.id });
+    const [c] = await tx.insert(campaigns).values({ tenantId, agentId: (await getAgent(tenantId, String(fd.get("agentId") || "") || null))?.id ?? null, type: "whatsapp", name, templateId: t.id, customValues, audience }).returning({ id: campaigns.id });
     for (let i = 0; i < leadIds.length; i += 1000) {
       await tx.insert(campaignRecipients).values(leadIds.slice(i, i + 1000).map((leadId) => ({ tenantId, campaignId: c.id, leadId })));
     }

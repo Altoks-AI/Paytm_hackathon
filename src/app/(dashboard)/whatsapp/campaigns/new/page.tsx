@@ -7,6 +7,7 @@ import { requireTenant } from "@/lib/tenant";
 import { Card } from "@/components/ui";
 import { NOT_CONNECTED, metaConfig } from "../../_components/meta";
 import { CampaignForm } from "./campaign-form";
+import { listAgents } from "@/lib/agents";
 
 export default function NewCampaignPage() {
   return (
@@ -38,7 +39,7 @@ async function NewCampaign() {
           You need at least one <b>APPROVED</b> template. <Link href="/whatsapp/templates" className="font-medium text-zinc-900 underline">Create or sync templates</Link>.
         </Card>
       ) : (
-        <CampaignForm templates={templates} leads={leadRows} />
+        <CampaignForm templates={templates} leads={leadRows} senders={(await listAgents(tenantId)).filter((a) => a.whatsappPhoneNumberId).map((a) => ({ id: a.id, label: `${a.whatsappNumber || a.whatsappPhoneNumberId} · ${a.agentName}` }))} />
       )}
     </div>
   );

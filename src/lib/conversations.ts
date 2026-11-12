@@ -16,7 +16,7 @@ export async function getOrCreateConversation(input: {
   const [existing] = await db
     .select()
     .from(conversations)
-    .where(and(eq(conversations.tenantId, tenantId), eq(conversations.channel, channel), eq(conversations.externalId, externalId), ne(conversations.status, "closed")))
+    .where(and(eq(conversations.tenantId, tenantId), eq(conversations.channel, channel), eq(conversations.externalId, externalId), ne(conversations.status, "closed"), ...(input.agentId ? [eq(conversations.agentId, input.agentId)] : [])))
     .orderBy(desc(conversations.updatedAt))
     .limit(1);
   if (existing) {

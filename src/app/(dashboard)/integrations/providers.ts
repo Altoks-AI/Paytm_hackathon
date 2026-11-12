@@ -8,9 +8,9 @@ export const PROVIDERS: ProviderDef[] = [
   {
     id: "meta_whatsapp",
     name: "Meta WhatsApp",
-    description: "WhatsApp Cloud API — inbound chat with your agent and template campaigns.",
+    description: "WhatsApp Cloud API: every number in your Business Account can be given to one agent.",
     fields: [
-      { key: "phoneNumberId", label: "Phone number ID", hint: "Meta developer app → Use cases → Customize → API Setup → Phone number ID" },
+      { key: "phoneNumberId", label: "Default phone number ID", hint: "Meta developer app → API Setup → Phone number ID. Every number in this WhatsApp Business Account can be assigned to an agent." },
       { key: "wabaId", label: "WhatsApp Business Account ID", hint: "Same API Setup page → WhatsApp Business Account ID (shown as Messaging account ID)" },
       { key: "accessToken", label: "Access token", secret: true, hint: "Business settings → System users → Generate token (business_management, whatsapp_business_messaging, whatsapp_business_management)" },
       { key: "verifyToken", label: "Webhook verify token", hint: "Any string you choose (auto-generated if blank); paste it in Meta's webhook settings" },
@@ -20,11 +20,11 @@ export const PROVIDERS: ProviderDef[] = [
   {
     id: "twilio",
     name: "Twilio Voice",
-    description: "Inbound and outbound AI phone calls.",
+    description: "AI phone calls: every number on your Twilio account can be given to one agent.",
     fields: [
       { key: "accountSid", label: "Account SID", hint: "Twilio Console home → Account Info → Account SID (starts with AC)" },
       { key: "authToken", label: "Auth token", secret: true, hint: "Twilio Console home → Account Info → Auth Token" },
-      { key: "phoneNumber", label: "Phone number", hint: "Phone Numbers → Active numbers; with country code, e.g. +14155550123" },
+      { key: "phoneNumber", label: "Default phone number", hint: "Used by agents without a number of their own. All numbers on the account can be assigned to agents. E.g. +14155550123" },
     ],
   },
   {

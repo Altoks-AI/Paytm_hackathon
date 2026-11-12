@@ -4,8 +4,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { campaignRecipients, integrations } from "@/db/schema";
 import { decryptJson } from "@/lib/crypto";
-import { findTenantByLookup, type ProviderConfig } from "@/lib/integrations";
-import { whatsappAgent } from "@/lib/agents";
+import { findTenantByLookup, getIntegration, type ProviderConfig } from "@/lib/integrations";
+import { findAgentByWhatsAppId, whatsappAgent } from "@/lib/agents";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { runAgent } from "@/lib/agent/run";
 import { sendWhatsAppText } from "@/lib/whatsapp";
@@ -90,7 +90,10 @@ async function messageText(m: WaMessage, tenantId: string, sttLanguage?: string)
 async function handleValue(value: WaValue, raw: string, signature: string | null) {
   const phoneNumberId = value.metadata?.phone_number_id;
   if (!phoneNumberId) return;
-  const found = await findTenantByLookup("meta_whatsapp", phoneNumberId);
+  // Route by the agent that owns this number; otherwise the integration's default number.
+  const owner = await findAgentByWhatsAppId(phoneNumberId);
+  const ownerCfg = owner ? await getIntegration(owner.tenantId, "meta_whatsapp") : null;
+  const found = owner && ownerCfg ? { tenantId: owner.tenantId, config: ownerCfg } : await findTenantByLookup("meta_whatsapp", phoneNumberId);
   if (!found) return;
   const { tenantId, config } = found;
   if (config.appSecret && !validSignature(raw, signature, config.appSecret)) {
@@ -108,7 +111,7 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
   }
 
   if (!value.messages?.length) return;
-  const settings = await whatsappAgent(tenantId);
+  const settings = owner && ownerCfg ? (owner.whatsappEnabled ? owner : null) : await whatsappAgent(tenantId);
   if (!settings) return;
   for (const m of value.messages) {
     if (!firstTime(m.id)) continue;
@@ -126,7 +129,7 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
     const { reply } = await runAgent({ tenantId, conversationId: conversation.id, channel: "whatsapp", userMessage: text });
     if (reply) {
       await chargeCredits(tenantId, "whatsapp_message", { note: `Reply to ${m.from ? `+${m.from}` : sender}`, allowNegative: true });
-      const r = await sendWhatsAppText(tenantId, sender, reply);
+      const r = await sendWhatsAppText(tenantId, sender, reply, phoneNumberId);
       if (r.error) console.error("whatsapp send failed", tenantId, r.error);
     }
   }

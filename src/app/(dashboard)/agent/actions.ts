@@ -9,6 +9,7 @@ import { requireTenant } from "@/lib/tenant";
 import { getAgent, listAgents, newWidgetKey } from "@/lib/agents";
 import { BUILTIN_TOOLS, saveCustomTool } from "@/lib/agent/custom-tools";
 import { configureNumberWebhook, listTwilioNumbers } from "@/lib/voice/numbers";
+import { listWhatsAppNumbers } from "@/lib/whatsapp-numbers";
 import { AGENT_TEMPLATES } from "./templates";
 import { LANGUAGE_CODES, VOICE_IDS, type FormState, type ToolPayload } from "./options";
 
@@ -66,7 +67,7 @@ export async function duplicateAgent(agentId: string) {
   const { tenantId, agent } = await ownAgent(agentId);
   const { id: _id, createdAt: _c, updatedAt: _u, phoneNumber: _p, widgetKey: _w, ...copy } = agent;
   void [_id, _c, _u, _p, _w];
-  const [a] = await db.insert(agents).values({ ...copy, tenantId, agentName: `${agent.agentName} (copy)`, widgetKey: newWidgetKey(), whatsappEnabled: false }).returning({ id: agents.id });
+  const [a] = await db.insert(agents).values({ ...copy, tenantId, agentName: `${agent.agentName} (copy)`, widgetKey: newWidgetKey(), whatsappPhoneNumberId: null, whatsappNumber: null }).returning({ id: agents.id });
   const [kb, tools] = await Promise.all([
     db.select().from(knowledgeItems).where(and(eq(knowledgeItems.tenantId, tenantId), eq(knowledgeItems.agentId, agent.id))),
     db.select().from(agentTools).where(and(eq(agentTools.tenantId, tenantId), eq(agentTools.agentId, agent.id))),
@@ -145,6 +146,15 @@ export async function saveChannels(_: FormState, form: FormData): Promise<FormSt
   const { tenantId, agent } = ctx;
   const whatsappEnabled = form.get("whatsappEnabled") === "on";
   const phoneNumber = s(form, "phoneNumber", 30) || null;
+  const waId = s(form, "whatsappPhoneNumberId", 40) || null;
+  let whatsappNumber: string | null = null;
+  if (waId) {
+    const wa = (await listWhatsAppNumbers(tenantId)).numbers.find((n) => n.id === waId);
+    if (!wa) return fail("That WhatsApp number is not in your WhatsApp Business Account.");
+    const [taken] = await db.select({ name: agents.agentName }).from(agents).where(and(eq(agents.whatsappPhoneNumberId, waId), ne(agents.id, agent.id)));
+    if (taken) return fail(`${wa.display} is already assigned to "${taken.name}". Unassign it there first.`);
+    whatsappNumber = wa.display;
+  }
 
   if (phoneNumber) {
     const { numbers } = await listTwilioNumbers(tenantId);
@@ -152,10 +162,14 @@ export async function saveChannels(_: FormState, form: FormData): Promise<FormSt
     const [taken] = await db.select({ name: agents.agentName }).from(agents).where(and(eq(agents.phoneNumber, phoneNumber), ne(agents.id, agent.id)));
     if (taken) return fail(`${phoneNumber} is already assigned to "${taken.name}". Unassign it there first.`);
   }
-  // Only one agent answers the WhatsApp number.
-  if (whatsappEnabled) await db.update(agents).set({ whatsappEnabled: false }).where(and(eq(agents.tenantId, tenantId), ne(agents.id, agent.id)));
-
-  const res = await update(form, { whatsappEnabled, voiceEnabled: form.get("voiceEnabled") === "on", chatbotEnabled: form.get("chatbotEnabled") === "on", phoneNumber });
+  const res = await update(form, {
+    whatsappEnabled,
+    whatsappPhoneNumberId: waId,
+    whatsappNumber,
+    voiceEnabled: form.get("voiceEnabled") === "on",
+    chatbotEnabled: form.get("chatbotEnabled") === "on",
+    phoneNumber,
+  });
   if (res.ok && phoneNumber && phoneNumber !== agent.phoneNumber) {
     const warn = await configureNumberWebhook(tenantId, phoneNumber);
     if (warn) return { ok: true, at: Date.now(), error: `Saved. Note: ${warn}` };

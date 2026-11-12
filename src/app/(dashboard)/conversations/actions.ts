@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { conversations, handoffs, messages } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
 import { sendWhatsAppText } from "@/lib/whatsapp";
+import { getAgent } from "@/lib/agents";
 
 async function ownConversation(id: string) {
   const { tenantId } = await requireTenant();
@@ -21,7 +22,8 @@ export async function sendReply(id: string, form: FormData) {
   if (!text) return;
   let error: string | undefined;
   if (conv.channel === "whatsapp") {
-    error = (await sendWhatsAppText(tenantId, conv.customerPhone || conv.externalId, text)).error;
+    const agent = conv.agentId ? await getAgent(tenantId, conv.agentId) : null;
+    error = (await sendWhatsAppText(tenantId, conv.customerPhone || conv.externalId, text, agent?.whatsappPhoneNumberId)).error;
   } else if (conv.channel === "voice") {
     error = "Voice calls can't receive text replies";
   }
