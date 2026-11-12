@@ -36,7 +36,7 @@ function languageRule(settings: Awaited<ReturnType<typeof getAgentSettings>>) {
 async function buildSystemPrompt(input: RunAgentInput, settings: Awaited<ReturnType<typeof getAgentSettings>>) {
   const [tenant, kb] = await Promise.all([
     getTenant(input.tenantId),
-    db.select().from(knowledgeItems).where(eq(knowledgeItems.tenantId, input.tenantId)).orderBy(asc(knowledgeItems.createdAt)),
+    settings ? db.select().from(knowledgeItems).where(and(eq(knowledgeItems.tenantId, input.tenantId), eq(knowledgeItems.agentId, settings.id))).orderBy(asc(knowledgeItems.createdAt)) : Promise.resolve([]),
   ]);
   let kbText = "";
   for (const k of kb) {
@@ -111,11 +111,11 @@ export async function startRun(input: RunAgentInput): Promise<Prepared | { resul
 /** Phase 2: settings, system prompt, history and tools for the LLM loop. */
 export async function buildRun(input: RunAgentInput, prep: Prepared) {
   const { tenantId, conversationId, channel } = input;
-  const settings = await getAgentSettings(tenantId);
+  const settings = await getAgentSettings(tenantId, prep.ctx.conversation.agentId);
   const [system, history, tools] = await Promise.all([
     buildSystemPrompt(input, settings),
     db.select().from(messages).where(and(eq(messages.conversationId, conversationId), eq(messages.tenantId, tenantId))).orderBy(desc(messages.createdAt)).limit(HISTORY),
-    loadTools(tenantId, settings?.disabledTools ?? []),
+    loadTools(tenantId, settings?.id ?? null, settings?.disabledTools ?? []),
   ]);
   prep.ctx.custom = tools.custom;
   const msgs: ChatMessage[] = [{ role: "system", content: system }];

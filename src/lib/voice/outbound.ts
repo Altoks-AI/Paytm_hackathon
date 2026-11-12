@@ -7,17 +7,20 @@ import { appUrl, getAgentSettings } from "@/lib/tenant-data";
 import { getIntegration } from "@/lib/integrations";
 import { hasCredits, OUT_OF_CREDITS } from "@/lib/credits";
 
-/** Throws a user-facing error if the tenant can't place calls. Returns Twilio config. */
-export async function assertVoiceReady(tenantId: string) {
-  const [cfg, settings] = await Promise.all([getIntegration(tenantId, "twilio"), getAgentSettings(tenantId)]);
+/** Throws a user-facing error if the agent can't place calls. Returns Twilio config (with the agent's caller ID) and the agent. */
+export async function assertVoiceReady(tenantId: string, agentId?: string | null) {
+  const [cfg, agent] = await Promise.all([getIntegration(tenantId, "twilio"), getAgentSettings(tenantId, agentId)]);
   if (!cfg) throw new Error("Twilio is not connected. Connect it in Integrations first.");
-  if (!settings?.voiceEnabled) throw new Error("Voice is disabled. Enable the voice channel in Agent settings first.");
+  if (!agent) throw new Error("Agent not found.");
+  if (!agent.voiceEnabled) throw new Error(`Voice is disabled for "${agent.agentName}". Enable it in Agents → Channels first.`);
+  const from = agent.phoneNumber || cfg.phoneNumber;
+  if (!from) throw new Error(`"${agent.agentName}" has no phone number. Assign one in Agents → Channels.`);
   if (!(await hasCredits(tenantId, "voice_minute"))) throw new Error(OUT_OF_CREDITS);
-  return cfg;
+  return { cfg: { ...cfg, phoneNumber: from }, agent };
 }
 
-export async function startOutboundCall(opts: { tenantId: string; to: string; leadId?: string; campaignId?: string; objective: string }) {
-  const cfg = await assertVoiceReady(opts.tenantId);
+export async function startOutboundCall(opts: { tenantId: string; agentId?: string | null; to: string; leadId?: string; campaignId?: string; objective: string }) {
+  const { cfg, agent } = await assertVoiceReady(opts.tenantId, opts.agentId);
   const to = opts.to.replace(/[^\d+]/g, "");
   if (!/^\+\d{8,15}$/.test(to)) throw new Error(`Invalid phone number "${opts.to}" (use E.164, e.g. +919876543210)`);
 
@@ -26,6 +29,7 @@ export async function startOutboundCall(opts: { tenantId: string; to: string; le
     .insert(calls)
     .values({
       tenantId: opts.tenantId,
+      agentId: agent.id,
       callSid: `pending-${randomUUID()}`,
       direction: "outbound",
       fromNumber: cfg.phoneNumber,
@@ -103,7 +107,7 @@ export async function runCallCampaign(tenantId: string, campaignId: string) {
       if (!next) break;
       try {
         if (!next.phone) throw new Error("Lead has no phone number");
-        const { callId, callSid } = await startOutboundCall({ tenantId, to: next.phone, leadId: next.leadId, campaignId, objective: campaign.callObjective || "Introduce our company and help the customer." });
+        const { callId, callSid } = await startOutboundCall({ tenantId, agentId: campaign.agentId, to: next.phone, leadId: next.leadId, campaignId, objective: campaign.callObjective || "Introduce our company and help the customer." });
         await db.update(campaignRecipients).set({ status: "sent", externalId: callSid, error: null, updatedAt: new Date() }).where(eq(campaignRecipients.id, next.id));
         // A very fast terminal status callback may have arrived before the recipient was marked "sent".
         const [c] = await db.select({ status: calls.status }).from(calls).where(eq(calls.id, callId));

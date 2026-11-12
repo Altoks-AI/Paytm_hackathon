@@ -4,7 +4,8 @@ import { Check, ChevronRight } from "lucide-react";
 import { and, count, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appointments, calls, campaigns, conversations, handoffs, integrations, leads, socialPosts } from "@/db/schema";
-import { getAgentSettings, requireTenant } from "@/lib/tenant";
+import { requireTenant } from "@/lib/tenant";
+import { listAgents } from "@/lib/agents";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { PROVIDERS } from "../integrations/providers";
 
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function DashboardPage() {
   const { tenant, tenantId } = await requireTenant();
   const n = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
-  const [leadCount, openConvs, pendingHandoffs, upcoming, callCount, campaignCount, postCount, settings, conns] = await Promise.all([
+  const [leadCount, openConvs, pendingHandoffs, upcoming, callCount, campaignCount, postCount, agentRows, conns] = await Promise.all([
     n(db.select({ n: count() }).from(leads).where(eq(leads.tenantId, tenantId))),
     n(db.select({ n: count() }).from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.status, "open")))),
     n(db.select({ n: count() }).from(handoffs).where(and(eq(handoffs.tenantId, tenantId), eq(handoffs.status, "pending")))),
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
     n(db.select({ n: count() }).from(calls).where(eq(calls.tenantId, tenantId))),
     n(db.select({ n: count() }).from(campaigns).where(eq(campaigns.tenantId, tenantId))),
     n(db.select({ n: count() }).from(socialPosts).where(eq(socialPosts.tenantId, tenantId))),
-    getAgentSettings(tenantId),
+    listAgents(tenantId),
     db.select({ provider: integrations.provider, enabled: integrations.enabled }).from(integrations).where(eq(integrations.tenantId, tenantId)),
   ]);
 
@@ -36,9 +37,9 @@ export default async function DashboardPage() {
   ];
   const conn = new Map(conns.map((c) => [c.provider, c.enabled]));
   const channels: [string, boolean | undefined, string][] = [
-    ["WhatsApp", settings?.whatsappEnabled, conn.get("meta_whatsapp") ? "" : "Needs Meta WhatsApp integration"],
-    ["Voice calls", settings?.voiceEnabled, conn.get("twilio") ? "" : "Needs Twilio integration"],
-    ["Chatbot widget", settings?.chatbotEnabled, ""],
+    ["WhatsApp", agentRows.some((a) => a.whatsappEnabled), conn.get("meta_whatsapp") ? "" : "Needs Meta WhatsApp integration"],
+    ["Voice calls", agentRows.some((a) => a.voiceEnabled), conn.get("twilio") ? "" : "Needs Twilio integration"],
+    ["Chatbot widget", agentRows.some((a) => a.chatbotEnabled), ""],
   ];
 
   return (

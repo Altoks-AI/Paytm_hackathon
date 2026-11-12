@@ -80,7 +80,36 @@ export const integrations = pgTable(
   (t) => [uniqueIndex("integrations_tenant_provider").on(t.tenantId, t.provider), index("integrations_lookup").on(t.provider, t.lookupKey)]
 );
 
-export const agentSettings = pgTable("agent_settings", {
+/** A tenant can run several agents. Each has its own persona, voice, tools, knowledge, widget and (optionally) one Twilio number. */
+export const agents = pgTable("agents", {
+  id: id(),
+  tenantId: tenantId(),
+  agentName: text("agent_name").notNull().default("Assistant"),
+  basePrompt: text("base_prompt").notNull().default(""), // custom instructions, shared by all channels
+  model: text("model").notNull().default("openai/gpt-4o-mini"), // OpenRouter model id
+  temperature: real("temperature").notNull().default(0.4),
+  language: text("language").notNull().default("te-IN"), // default language
+  extraLanguages: jsonb("extra_languages").$type<string[]>().notNull().default(["hi-IN", "en-IN"]), // optional languages the agent may switch to
+  disabledTools: jsonb("disabled_tools").$type<string[]>().notNull().default([]), // built-in tool names switched off (see BUILTIN_TOOLS)
+  voice: text("voice").notNull().default("kavitha_te_conversation"), // Sarvam TTS speaker
+  greeting: text("greeting").notNull().default("Hi! How can I help you today?"),
+  whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false), // at most one agent per tenant answers WhatsApp
+  voiceEnabled: boolean("voice_enabled").notNull().default(false),
+  chatbotEnabled: boolean("chatbot_enabled").notNull().default(false),
+  phoneNumber: text("phone_number").unique(), // Twilio number (E.164) assigned to this agent: inbound calls to it reach this agent, outbound calls come from it
+  handoffPhone: text("handoff_phone"), // human number calls are transferred to
+  widgetKey: text("widget_key").notNull().unique(), // public key used by the embeddable chatbot widget
+  widgetColor: text("widget_color").notNull().default("#0f5b48"),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("agents_tenant").on(t.tenantId, t.createdAt)]);
+
+/** Back-compat alias: code that read the single agent's settings now reads an agent row. */
+export const agentSettings = agents;
+export type Agent = typeof agents.$inferSelect;
+
+/** LEGACY single-agent table (one row per tenant). Kept only so existing rows can be migrated into `agents`; see lib/agents.ts. */
+export const legacyAgentSettings = pgTable("agent_settings", {
   tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
   agentName: text("agent_name").notNull().default("Assistant"),
   basePrompt: text("base_prompt").notNull().default(""), // tenant's custom instructions, shared by all channels
@@ -106,6 +135,7 @@ export type ToolParam = { name: string; type: "string" | "number" | "boolean"; d
 export const agentTools = pgTable("agent_tools", {
   id: id(),
   tenantId: tenantId(),
+  agentId: uuid("agent_id").references((): AnyPgColumn => agents.id, { onDelete: "cascade" }),
   name: text("name").notNull(), // snake_case function name shown to the LLM
   description: text("description").notNull(), // tells the LLM when to call it
   method: text("method").notNull().default("POST"), // GET | POST | PUT | PATCH | DELETE
@@ -114,11 +144,12 @@ export const agentTools = pgTable("agent_tools", {
   parameters: jsonb("parameters").$type<ToolParam[]>().notNull().default([]),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: createdAt(),
-}, (t) => [uniqueIndex("agent_tools_tenant_name").on(t.tenantId, t.name)]);
+}, (t) => [uniqueIndex("agent_tools_agent_name").on(t.agentId, t.name)]);
 
 export const knowledgeItems = pgTable("knowledge_items", {
   id: id(),
   tenantId: tenantId(),
+  agentId: uuid("agent_id").references((): AnyPgColumn => agents.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   content: text("content").notNull(),
   createdAt: createdAt(),
@@ -142,6 +173,7 @@ export type Channel = "whatsapp" | "voice" | "chatbot";
 export const conversations = pgTable("conversations", {
   id: id(),
   tenantId: tenantId(),
+  agentId: uuid("agent_id").references((): AnyPgColumn => agents.id, { onDelete: "set null" }),
   channel: text("channel").$type<Channel>().notNull(),
   externalId: text("external_id").notNull(), // customer phone (whatsapp/voice: callSid) or chatbot session id
   customerPhone: text("customer_phone"),
@@ -200,6 +232,7 @@ export const waTemplates = pgTable("wa_templates", {
 export const campaigns = pgTable("campaigns", {
   id: id(),
   tenantId: tenantId(),
+  agentId: uuid("agent_id").references((): AnyPgColumn => agents.id, { onDelete: "set null" }),
   type: text("type").$type<"whatsapp" | "call">().notNull(),
   name: text("name").notNull(),
   templateId: uuid("template_id").references(() => waTemplates.id, { onDelete: "set null" }), // whatsapp
@@ -224,6 +257,7 @@ export const campaignRecipients = pgTable("campaign_recipients", {
 export const calls = pgTable("calls", {
   id: id(),
   tenantId: tenantId(),
+  agentId: uuid("agent_id").references((): AnyPgColumn => agents.id, { onDelete: "set null" }),
   callSid: text("call_sid").notNull().unique(),
   direction: text("direction").notNull(), // inbound | outbound
   fromNumber: text("from_number"),
@@ -234,6 +268,9 @@ export const calls = pgTable("calls", {
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
   objective: text("objective"),
   durationSec: integer("duration_sec"),
+  recordingSid: text("recording_sid"),
+  recordingUrl: text("recording_url"), // Twilio recording resource URL (append .mp3); played via /api/calls/{id}/recording
+  recordingDurationSec: integer("recording_duration_sec"),
   createdAt: createdAt(),
 }, (t) => [index("calls_tenant").on(t.tenantId)]);
 

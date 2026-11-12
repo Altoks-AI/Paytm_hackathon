@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { campaignRecipients, integrations } from "@/db/schema";
 import { decryptJson } from "@/lib/crypto";
 import { findTenantByLookup, type ProviderConfig } from "@/lib/integrations";
-import { getAgentSettings } from "@/lib/tenant";
+import { whatsappAgent } from "@/lib/agents";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { runAgent } from "@/lib/agent/run";
 import { sendWhatsAppText } from "@/lib/whatsapp";
@@ -108,8 +108,8 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
   }
 
   if (!value.messages?.length) return;
-  const settings = await getAgentSettings(tenantId);
-  if (!settings?.whatsappEnabled) return;
+  const settings = await whatsappAgent(tenantId);
+  if (!settings) return;
   for (const m of value.messages) {
     if (!firstTime(m.id)) continue;
     // Multilingual agents: let Sarvam auto-detect the voice-note language.
@@ -118,7 +118,7 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
     const sender = m.from || m.from_user_id;
     if (!text || !sender) continue;
     const name = value.contacts?.find((c) => (m.from && c.wa_id === m.from) || (m.from_user_id && c.user_id === m.from_user_id))?.profile?.name;
-    const conversation = await getOrCreateConversation({ tenantId, channel: "whatsapp", externalId: sender, customerPhone: m.from ? `+${m.from}` : undefined, customerName: name });
+    const conversation = await getOrCreateConversation({ tenantId, agentId: settings.id, channel: "whatsapp", externalId: sender, customerPhone: m.from ? `+${m.from}` : undefined, customerName: name });
     if (!(await hasCredits(tenantId, "whatsapp_message"))) {
       console.warn("whatsapp: tenant out of credits", tenantId);
       continue;

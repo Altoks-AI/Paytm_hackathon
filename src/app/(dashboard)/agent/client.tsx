@@ -1,12 +1,90 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition, type ComponentProps, type ReactNode } from "react";
+import { createContext, useActionState, useContext, useMemo, useState, useTransition, type ComponentProps, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Copy, Plus, Trash2, X } from "lucide-react";
 import { Badge, Button, Input, Label, Select, Textarea, Toggle } from "@/components/ui";
-import { applyTemplate, deleteTool, saveTool, toggleTool } from "./actions";
+import { applyTemplate, createAgent, deleteAgent, deleteTool, duplicateAgent, saveTool, toggleTool } from "./actions";
 import { AGENT_TEMPLATES } from "./templates";
 import { LANGUAGES, VOICE_OPTIONS, type ClientTool, type FormState, type ModelOption, type ToolParamRow } from "./options";
+
+/** The agent being edited; every form and action on the page is scoped to it. */
+const AgentCtx = createContext("");
+export function AgentScope({ agentId, children }: { agentId: string; children: ReactNode }) {
+  return <AgentCtx.Provider value={agentId}>{children}</AgentCtx.Provider>;
+}
+
+/* ---------- agent switcher ---------- */
+
+type AgentOpt = { id: string; name: string; phoneNumber: string | null };
+
+export function AgentSwitcher({ agents, current, tab }: { agents: AgentOpt[]; current: string; tab: string }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [creating, setCreating] = useState(false);
+  const go = (id: string) => router.push(`/agent?agent=${id}${tab !== "general" ? `&tab=${tab}` : ""}`);
+  const cur = agents.find((a) => a.id === current);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-56 flex-1 sm:max-w-sm">
+          <Label hint={`${agents.length} agent${agents.length === 1 ? "" : "s"}`}>Agent</Label>
+          <Select value={current} onChange={(e) => go(e.target.value)} disabled={busy}>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {a.phoneNumber ? ` · ${a.phoneNumber}` : ""}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="button" onClick={() => setCreating((v) => !v)} disabled={busy}>
+          <Plus size={16} strokeWidth={2} aria-hidden /> New agent
+        </Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => start(() => duplicateAgent(current))}>
+          <Copy size={15} strokeWidth={2} aria-hidden /> Duplicate
+        </Button>
+        {agents.length > 1 && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-red-600 hover:bg-red-50"
+            disabled={busy}
+            onClick={() => confirm(`Delete "${cur?.name}"? Its knowledge base, webhook tools and widget key are deleted too.`) && start(() => deleteAgent(current))}
+          >
+            <Trash2 size={15} strokeWidth={2} aria-hidden /> Delete
+          </Button>
+        )}
+      </div>
+      {creating && (
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+          <p className="mb-3 text-sm font-medium text-zinc-900">Create a new agent</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[{ id: null, name: "Blank agent", tagline: "Start from scratch" }, ...AGENT_TEMPLATES].map((t) => (
+              <button
+                key={t.id ?? "blank"}
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  start(async () => {
+                    const id = await createAgent(t.id);
+                    setCreating(false);
+                    if (id) go(id);
+                  })
+                }
+                className="rounded-lg border border-zinc-200 bg-white p-3 text-left transition hover:border-zinc-900 disabled:opacity-50"
+              >
+                <span className="block text-sm font-medium text-zinc-900">{t.name}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">{t.tagline}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function SubmitButton({ children, pendingText, ...p }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
@@ -58,8 +136,10 @@ function Status({ state }: { state: FormState }) {
 /** A section form that saves independently and shows saved / error state next to its button. */
 export function ActionForm({ action, children, submitLabel = "Save", extra, className }: { action: (s: FormState, f: FormData) => Promise<FormState>; children: ReactNode; submitLabel?: string; extra?: ReactNode; className?: string }) {
   const [state, formAction] = useActionState(action, {});
+  const agentId = useContext(AgentCtx);
   return (
     <form action={formAction} className={className ?? "space-y-5"}>
+      <input type="hidden" name="agentId" value={agentId} />
       {children}
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-100 pt-4">
         <Status state={state} />
@@ -73,6 +153,7 @@ export function ActionForm({ action, children, submitLabel = "Save", extra, clas
 /* ---------- templates ---------- */
 
 export function TemplatePicker() {
+  const agentId = useContext(AgentCtx);
   const [busy, start] = useTransition();
   const [res, setRes] = useState<FormState & { id?: string }>({});
   return (
@@ -91,7 +172,7 @@ export function TemplatePicker() {
               disabled={busy}
               onClick={() => {
                 if (!confirm(`Apply "${t.name}"? This replaces your agent name, greeting, instructions, languages, voice and built-in tools. Your knowledge base, channels and webhook tools stay as they are.`)) return;
-                start(async () => setRes({ ...(await applyTemplate(t.id)), id: t.id }));
+                start(async () => setRes({ ...(await applyTemplate(agentId, t.id)), id: t.id }));
               }}
             >
               {busy ? "Applying…" : res.ok && res.id === t.id ? "Applied" : "Use template"}
@@ -252,6 +333,7 @@ function ToolEditor({ tool, methods, onClose }: { tool?: ClientTool; methods: re
   const [headers, setHeaders] = useState<HeaderRow[]>(tool ? [] : [{ key: "", value: "" }]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const agentId = useContext(AgentCtx);
 
   const setParam = (i: number, patch: Partial<ToolParamRow>) => setParams(params.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   const setHeader = (i: number, patch: Partial<HeaderRow>) => setHeaders(headers.map((h, j) => (j === i ? { ...h, ...patch } : h)));
@@ -259,7 +341,7 @@ function ToolEditor({ tool, methods, onClose }: { tool?: ClientTool; methods: re
   const submit = () =>
     start(async () => {
       setError(null);
-      const err = await saveTool(tool?.id ?? null, {
+      const err = await saveTool(agentId, tool?.id ?? null, {
         name,
         description,
         method,

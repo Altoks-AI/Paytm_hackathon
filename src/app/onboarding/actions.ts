@@ -1,10 +1,9 @@
 "use server";
 
-import { randomBytes } from "crypto";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { agentSettings, creditTransactions, tenants, users } from "@/db/schema";
+import { creditTransactions, tenants, users } from "@/db/schema";
 import { FREE_CREDITS } from "@/lib/credits";
 import { requireUser } from "@/lib/tenant";
 import { basicSummary, normalizeWebsite, summarizeCompany } from "@/lib/company";
@@ -39,7 +38,6 @@ export async function completeOnboarding(_: { error?: string }, formData: FormDa
       await tx.insert(creditTransactions).values({ tenantId, amount: FREE_CREDITS, kind: "grant", note: "Free starting credits" });
       await tx.update(users).set({ tenantId }).where(eq(users.id, user.id));
     }
-    await tx.insert(agentSettings).values({ tenantId, widgetKey: randomBytes(16).toString("hex"), basePrompt: "" }).onConflictDoNothing();
   });
   redirect("/dashboard");
 }

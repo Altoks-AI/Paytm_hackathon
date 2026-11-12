@@ -16,9 +16,9 @@ export type ToolContext = {
 };
 
 /** Tools for this tenant: built-ins that aren't switched off + enabled custom webhook tools. */
-export async function loadTools(tenantId: string, disabled: string[] = []): Promise<{ defs: ToolDef[]; custom: Map<string, CustomTool> }> {
+export async function loadTools(tenantId: string, agentId: string | null, disabled: string[] = []): Promise<{ defs: ToolDef[]; custom: Map<string, CustomTool> }> {
   const builtin = agentTools.filter((t) => !disabled.includes(t.function.name));
-  const rows = (await listCustomTools(tenantId)).filter((t) => t.enabled && !builtin.some((b) => b.function.name === t.name));
+  const rows = (agentId ? await listCustomTools(tenantId, agentId) : []).filter((t) => t.enabled && !builtin.some((b) => b.function.name === t.name));
   return { defs: [...builtin, ...rows.map(toToolDef)], custom: new Map(rows.map((t) => [t.name, t])) };
 }
 

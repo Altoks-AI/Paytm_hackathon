@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
   if (!(await hasCredits(s.tenantId, "chatbot_message"))) return json({ error: "Chat is currently unavailable" }, 403);
 
-  const conversation = await getOrCreateConversation({ tenantId: s.tenantId, channel: "chatbot", externalId: body.sessionId });
+  const conversation = await getOrCreateConversation({ tenantId: s.tenantId, agentId: s.id, channel: "chatbot", externalId: body.sessionId });
   const result = await runAgent({ tenantId: s.tenantId, conversationId: conversation.id, channel: "chatbot", userMessage: message });
   if (result.reply) await chargeCredits(s.tenantId, "chatbot_message", { allowNegative: true });
   return json({ reply: result.reply, handoff: result.handoff || conversation.status === "handoff", ended: result.ended });

@@ -9,6 +9,8 @@ export async function getOrCreateConversation(input: {
   externalId: string;
   customerPhone?: string;
   customerName?: string;
+  /** agent that handles this conversation (new conversations only) */
+  agentId?: string | null;
 }) {
   const { tenantId, channel, externalId } = input;
   const [existing] = await db
@@ -30,7 +32,7 @@ export async function getOrCreateConversation(input: {
   }
   const [created] = await db
     .insert(conversations)
-    .values({ tenantId, channel, externalId, customerPhone: input.customerPhone ?? null, customerName: input.customerName ?? null })
+    .values({ tenantId, agentId: input.agentId ?? null, channel, externalId, customerPhone: input.customerPhone ?? null, customerName: input.customerName ?? null })
     .returning();
   return created;
 }

@@ -6,8 +6,24 @@ import { ActionForm } from "./action-form";
 import { createCallCampaign } from "./actions";
 
 type LeadOpt = { id: string; name: string | null; phone: string | null; status: string };
+export type AgentOpt = { id: string; label: string };
 
-export function NewCampaignForm({ leads }: { leads: LeadOpt[] }) {
+export function AgentSelect({ agents }: { agents: AgentOpt[] }) {
+  return (
+    <div>
+      <Label hint="its voice, prompt and phone number are used">Agent</Label>
+      <Select name="agentId" required defaultValue={agents[0]?.id}>
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.label}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
+export function NewCampaignForm({ leads, agents }: { leads: LeadOpt[]; agents: AgentOpt[] }) {
   const [audience, setAudience] = useState<"all" | "selected">("all");
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -29,6 +45,7 @@ export function NewCampaignForm({ leads }: { leads: LeadOpt[] }) {
         <Label>Name</Label>
         <Input name="name" required placeholder="November demo outreach" />
       </div>
+      <AgentSelect agents={agents} />
       <div>
         <Label hint="what the agent should achieve on each call">Objective</Label>
         <Textarea name="objective" required placeholder="Qualify the lead (budget, timeline, team size) and book a demo." />

@@ -70,21 +70,22 @@ export function validateTool(input: CustomToolInput): { error: string } | { valu
 }
 
 /** Create (no id) or update (id) a tenant's tool. Returns an error string or null. */
-export async function saveCustomTool(tenantId: string, input: CustomToolInput, id?: string): Promise<string | null> {
+export async function saveCustomTool(tenantId: string, agentId: string, input: CustomToolInput, id?: string): Promise<string | null> {
   const v = validateTool(input);
   if ("error" in v) return v.error;
   const { headers, ...rest } = v.value;
   const row = { ...rest, enabled: rest.enabled ?? true, ...(headers ? { headersEncrypted: Object.keys(headers).length ? encryptJson(headers) : null } : {}) };
   try {
     if (id) await db.update(agentTools).set(row).where(and(eq(agentTools.id, id), eq(agentTools.tenantId, tenantId)));
-    else await db.insert(agentTools).values({ tenantId, ...row });
+    else await db.insert(agentTools).values({ tenantId, agentId, ...row });
     return null;
   } catch (e) {
-    return String(e).includes("agent_tools_tenant_name") ? "A tool with this name already exists" : "Could not save the tool";
+    return String(e).includes("agent_tools_agent_name") ? "A tool with this name already exists" : "Could not save the tool";
   }
 }
 
-export const listCustomTools = (tenantId: string) => db.select().from(agentTools).where(eq(agentTools.tenantId, tenantId)).orderBy(agentTools.createdAt);
+export const listCustomTools = (tenantId: string, agentId: string) =>
+  db.select().from(agentTools).where(and(eq(agentTools.tenantId, tenantId), eq(agentTools.agentId, agentId))).orderBy(agentTools.createdAt);
 
 /** Header names only (values are secret) — for showing in the UI. */
 export function headerNames(tool: CustomTool): string[] {

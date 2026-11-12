@@ -6,6 +6,7 @@ import { getOrCreateConversation } from "@/lib/conversations";
 import { forbidden, hangup, isValidTwilio, readTwilioForm } from "@/lib/voice/twiml";
 import { agentTurn, loadCall } from "@/lib/voice/session";
 import { realtimeEnabled, streamTwiml } from "@/lib/voice/stream-token";
+import { startRecording } from "@/lib/voice/recording";
 
 export async function POST(req: NextRequest) {
   const p = await readTwilioForm(req);
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
   const [lead] = call.leadId ? await db.select().from(leads).where(and(eq(leads.id, call.leadId), eq(leads.tenantId, call.tenantId))) : [];
   const conversation = await getOrCreateConversation({
     tenantId: call.tenantId,
+    agentId: call.agentId,
     channel: "voice",
     externalId: p.CallSid,
     customerPhone: call.toNumber ?? undefined,
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
   if (lead && !conversation.leadId) await db.update(conversations).set({ leadId: lead.id }).where(eq(conversations.id, conversation.id));
   [call] = await db.update(calls).set({ callSid: p.CallSid, status: "in-progress", conversationId: conversation.id }).where(eq(calls.id, call.id)).returning();
 
+  startRecording(call.tenantId, call.id, p.CallSid);
   if (realtimeEnabled()) return streamTwiml(call.id, p.CallSid);
   return agentTurn({ call, settings, tenantNumber: twilio.phoneNumber });
 }

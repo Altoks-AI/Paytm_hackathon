@@ -1,11 +1,12 @@
 // Framework-free tenant helpers (no next/* or auth imports) — safe to load from the custom server (server.ts).
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { tenants, agentSettings } from "@/db/schema";
+import { tenants } from "@/db/schema";
+import { getAgent } from "@/lib/agents";
 
-export async function getAgentSettings(tenantId: string) {
-  const [s] = await db.select().from(agentSettings).where(eq(agentSettings.tenantId, tenantId));
-  return s ?? null;
+/** An agent's settings: the given agent, or the tenant's first (default) agent. */
+export async function getAgentSettings(tenantId: string, agentId?: string | null) {
+  return getAgent(tenantId, agentId);
 }
 
 export async function getTenant(tenantId: string) {

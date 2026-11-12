@@ -15,8 +15,10 @@ export async function loadCall(where: { id?: string | null; callSid?: string | n
   if (!cond) return null;
   const [call] = await db.select().from(calls).where(cond);
   if (!call) return null;
-  const [twilio, settings] = await Promise.all([getIntegration(call.tenantId, "twilio"), getAgentSettings(call.tenantId)]);
-  if (!twilio) return null;
+  const [cfg, settings] = await Promise.all([getIntegration(call.tenantId, "twilio"), getAgentSettings(call.tenantId, call.agentId)]);
+  if (!cfg) return null;
+  // The agent's own number is the caller ID for transfers; fall back to the integration's number.
+  const twilio = { ...cfg, phoneNumber: settings?.phoneNumber || cfg.phoneNumber };
   return { call, twilio, settings };
 }
 

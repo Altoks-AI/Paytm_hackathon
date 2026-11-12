@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { conversations, leads, messages } from "@/db/schema";
+import { calls, conversations, leads, messages } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
 import { formatDateTime } from "@/lib/agent/time";
 import { Badge, Button, Card, Empty, PageHeader, Textarea } from "@/components/ui";
@@ -37,9 +37,10 @@ async function ConversationContent({ params, searchParams }: Props) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [conv] = await db.select().from(conversations).where(and(eq(conversations.id, id), eq(conversations.tenantId, tenantId)));
   if (!conv) notFound();
-  const [msgs, lead] = await Promise.all([
+  const [msgs, lead, call] = await Promise.all([
     db.select().from(messages).where(and(eq(messages.conversationId, id), eq(messages.tenantId, tenantId))).orderBy(asc(messages.createdAt)).limit(500),
     conv.leadId ? db.select().from(leads).where(and(eq(leads.id, conv.leadId), eq(leads.tenantId, tenantId))).then((r) => r[0]) : undefined,
+    conv.channel === "voice" ? db.select({ id: calls.id, recordingUrl: calls.recordingUrl }).from(calls).where(and(eq(calls.conversationId, id), eq(calls.tenantId, tenantId))).then((r) => r[0]) : undefined,
   ]);
   const who = conv.customerName || conv.customerPhone || (conv.channel === "chatbot" ? "Website visitor" : conv.externalId);
   const setStatus = (s: "open" | "handoff" | "closed") => setConversationStatus.bind(null, id, s);
@@ -79,6 +80,16 @@ async function ConversationContent({ params, searchParams }: Props) {
 
       {conv.status === "handoff" && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">A human has taken over — the AI agent will not reply until you return it to AI.</div>
+      )}
+
+      {call?.recordingUrl && (
+        <Card className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-zinc-900">Call recording</span>
+          <audio controls preload="none" src={`/api/calls/${call.id}/recording`} className="h-9 min-w-0 flex-1" />
+          <a href={`/api/calls/${call.id}/recording?download=1`} className="text-sm text-zinc-500 underline">
+            Download
+          </a>
+        </Card>
       )}
 
       <Card className="space-y-3 bg-zinc-50">

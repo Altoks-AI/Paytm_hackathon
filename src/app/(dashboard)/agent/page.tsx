@@ -2,11 +2,12 @@ import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { integrations, knowledgeItems } from "@/db/schema";
-import { appUrl, getAgentSettings, requireTenant } from "@/lib/tenant";
-import { ensureAgentSettings } from "@/lib/agent/settings";
+import { integrations, knowledgeItems, type Agent } from "@/db/schema";
+import { appUrl, requireTenant } from "@/lib/tenant";
+import { listAgents } from "@/lib/agents";
+import { listTwilioNumbers } from "@/lib/voice/numbers";
 import { BUILTIN_TOOLS, TOOL_METHODS, headerNames, listCustomTools } from "@/lib/agent/custom-tools";
-import { Badge, Card, Empty, Input, Label, PageHeader, Textarea, Toggle } from "@/components/ui";
+import { Badge, Card, Empty, Input, Label, PageHeader, Select, Textarea, Toggle } from "@/components/ui";
 import {
   addKnowledge,
   deleteKnowledge,
@@ -19,7 +20,7 @@ import {
   saveWidget,
   updateKnowledge,
 } from "./actions";
-import { ActionForm, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton, TemplatePicker, VoicePicker } from "./client";
+import { ActionForm, AgentScope, AgentSwitcher, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton, TemplatePicker, VoicePicker } from "./client";
 import { getToolModels } from "./models";
 import type { ClientTool } from "./options";
 
@@ -33,7 +34,7 @@ const TABS = [
   ["widget", "Widget"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
-type SP = Promise<{ tab?: string }>;
+type SP = Promise<{ tab?: string; agent?: string }>;
 
 export default function AgentPage({ searchParams }: { searchParams: SP }) {
   return (
@@ -82,18 +83,21 @@ async function AgentContent({ searchParams }: { searchParams: SP }) {
   const { tenantId } = await requireTenant();
   const sp = await searchParams;
   const tab: Tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as Tab) : "general";
-  await ensureAgentSettings(tenantId);
-  const settings = await getAgentSettings(tenantId);
+  const all = await listAgents(tenantId);
+  const settings = all.find((a) => a.id === sp.agent) ?? all[0];
   if (!settings) return <Empty>Could not load agent settings.</Empty>;
+  const q = (k: string) => `/agent?agent=${settings.id}${k === "general" ? "" : `&tab=${k}`}`;
 
   return (
+    <AgentScope agentId={settings.id}>
     <div className="space-y-6">
-      <PageHeader title="AI Agent" description="One agent for WhatsApp, voice calls and your website chat widget." />
+      <PageHeader title="AI Agents" description="Create several agents, each with its own persona, voice, tools, knowledge and phone number." />
+      <AgentSwitcher agents={all.map((a) => ({ id: a.id, name: a.agentName, phoneNumber: a.phoneNumber }))} current={settings.id} tab={tab} />
       <nav className="-mt-2 flex gap-1 overflow-x-auto border-b border-zinc-200">
         {TABS.map(([k, label]) => (
           <Link
             key={k}
-            href={k === "general" ? "/agent" : `/agent?tab=${k}`}
+            href={q(k)}
             className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition ${k === tab ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
           >
             {label}
@@ -110,15 +114,16 @@ async function AgentContent({ searchParams }: { searchParams: SP }) {
       )}
       {tab === "voice" && <LanguagesVoice key={settings.updatedAt.getTime()} s={settings} />}
       {tab === "model" && <ModelTab s={settings} />}
-      {tab === "tools" && <ToolsTab tenantId={tenantId} disabled={settings.disabledTools} />}
-      {tab === "knowledge" && <Knowledge tenantId={tenantId} />}
-      {tab === "channels" && <Channels tenantId={tenantId} s={settings} />}
+      {tab === "tools" && <ToolsTab tenantId={tenantId} agentId={settings.id} disabled={settings.disabledTools} />}
+      {tab === "knowledge" && <Knowledge tenantId={tenantId} agentId={settings.id} />}
+      {tab === "channels" && <Channels tenantId={tenantId} s={settings} others={all.filter((a) => a.id !== settings.id)} />}
       {tab === "widget" && <Widget s={settings} />}
     </div>
+    </AgentScope>
   );
 }
 
-type Settings = NonNullable<Awaited<ReturnType<typeof getAgentSettings>>>;
+type Settings = Agent;
 
 function General({ s }: { s: Settings }) {
   return (
@@ -169,8 +174,8 @@ async function ModelTab({ s }: { s: Settings }) {
   );
 }
 
-async function ToolsTab({ tenantId, disabled }: { tenantId: string; disabled: string[] }) {
-  const rows = await listCustomTools(tenantId);
+async function ToolsTab({ tenantId, agentId, disabled }: { tenantId: string; agentId: string; disabled: string[] }) {
+  const rows = await listCustomTools(tenantId, agentId);
   const tools: ClientTool[] = rows.map((t) => ({ id: t.id, name: t.name, description: t.description, method: t.method, url: t.url, parameters: t.parameters, enabled: t.enabled, headerNames: headerNames(t) }));
   return (
     <div className="space-y-6">
@@ -200,8 +205,8 @@ async function ToolsTab({ tenantId, disabled }: { tenantId: string; disabled: st
   );
 }
 
-async function Knowledge({ tenantId }: { tenantId: string }) {
-  const kb = await db.select().from(knowledgeItems).where(eq(knowledgeItems.tenantId, tenantId)).orderBy(asc(knowledgeItems.createdAt));
+async function Knowledge({ tenantId, agentId }: { tenantId: string; agentId: string }) {
+  const kb = await db.select().from(knowledgeItems).where(and(eq(knowledgeItems.tenantId, tenantId), eq(knowledgeItems.agentId, agentId))).orderBy(asc(knowledgeItems.createdAt));
   const kbChars = kb.reduce((n, k) => n + k.title.length + k.content.length, 0);
   return (
     <Section
@@ -237,6 +242,7 @@ async function Knowledge({ tenantId }: { tenantId: string }) {
         </div>
       )}
       <form action={addKnowledge} className="space-y-3 rounded-lg bg-zinc-50 p-4">
+        <input type="hidden" name="agentId" value={agentId} />
         <Input name="title" placeholder="Question or topic, e.g. What are your opening hours?" required />
         <Textarea name="content" placeholder="Answer / details" rows={3} required />
         <div className="flex justify-end">
@@ -247,14 +253,43 @@ async function Knowledge({ tenantId }: { tenantId: string }) {
   );
 }
 
-async function Channels({ tenantId, s }: { tenantId: string; s: Settings }) {
-  const conns = await db.select({ provider: integrations.provider }).from(integrations).where(and(eq(integrations.tenantId, tenantId), eq(integrations.enabled, true)));
+async function Channels({ tenantId, s, others }: { tenantId: string; s: Settings; others: Settings[] }) {
+  const [conns, { numbers, error }] = await Promise.all([
+    db.select({ provider: integrations.provider }).from(integrations).where(and(eq(integrations.tenantId, tenantId), eq(integrations.enabled, true))),
+    listTwilioNumbers(tenantId),
+  ]);
   const connected = new Set(conns.map((c) => c.provider));
+  const owner = new Map(others.filter((a) => a.phoneNumber).map((a) => [a.phoneNumber as string, a.agentName]));
+  const waOwner = others.find((a) => a.whatsappEnabled);
   return (
-    <Section title="Channels" description="Where the agent is live.">
+    <Section title="Channels" description="Where this agent is live. Each phone number belongs to one agent: inbound calls to it reach this agent, and its outbound calls come from it.">
       <ActionForm action={saveChannels}>
+        <div className="max-w-md">
+          <Label hint="from your Twilio account">Phone number</Label>
+          {connected.has("twilio") ? (
+            <Select name="phoneNumber" defaultValue={s.phoneNumber ?? ""}>
+              <option value="">No number assigned</option>
+              {numbers.map((n) => {
+                const by = owner.get(n.phoneNumber);
+                return (
+                  <option key={n.phoneNumber} value={n.phoneNumber} disabled={!!by}>
+                    {n.phoneNumber}
+                    {n.friendlyName && n.friendlyName !== n.phoneNumber ? ` · ${n.friendlyName}` : ""}
+                    {by ? ` (used by ${by})` : ""}
+                  </option>
+                );
+              })}
+            </Select>
+          ) : (
+            <p className="text-sm text-amber-700">
+              Twilio is not connected. <Link href="/integrations" className="underline">Connect it in Integrations</Link> to assign a number.
+            </p>
+          )}
+          {error && <p className="mt-1 text-xs text-amber-700">Could not list numbers from Twilio: {error}</p>}
+          <p className="mt-1 text-xs text-zinc-500">The number&apos;s incoming-call webhook is pointed at this app automatically when you save.</p>
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <ToggleRow name="whatsappEnabled" label="WhatsApp" desc="Reply to inbound WhatsApp messages" checked={s.whatsappEnabled} missing={connected.has("meta_whatsapp") ? undefined : "Meta WhatsApp"} />
+          <ToggleRow name="whatsappEnabled" label="WhatsApp" desc={waOwner ? `Currently answered by "${waOwner.agentName}". Turning this on moves WhatsApp to this agent.` : "Reply to inbound WhatsApp messages"} checked={s.whatsappEnabled} missing={connected.has("meta_whatsapp") ? undefined : "Meta WhatsApp"} />
           <ToggleRow name="voiceEnabled" label="Voice calls" desc="Answer and place phone calls" checked={s.voiceEnabled} missing={connected.has("twilio") ? undefined : "Twilio"} />
           <ToggleRow name="chatbotEnabled" label="Website chatbot" desc="Embeddable chat widget" checked={s.chatbotEnabled} />
         </div>
@@ -277,7 +312,7 @@ function Widget({ s }: { s: Settings }) {
         s.chatbotEnabled ? (
           <Badge tone="green">Enabled</Badge>
         ) : (
-          <Link href="/agent?tab=channels">
+          <Link href={`/agent?agent=${s.id}&tab=channels`}>
             <Badge tone="amber">Disabled — enable in Channels</Badge>
           </Link>
         )

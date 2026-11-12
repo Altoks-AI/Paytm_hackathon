@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { agentSettings } from "@/db/schema";
+import { agents as agentSettings } from "@/db/schema";
 
 export const cors = {
   "Access-Control-Allow-Origin": "*",

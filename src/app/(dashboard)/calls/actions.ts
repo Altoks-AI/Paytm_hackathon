@@ -6,6 +6,7 @@ import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, campaignRecipients, leads } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
+import { getAgent } from "@/lib/agents";
 import { assertVoiceReady, isCampaignRunning, runCallCampaign, startOutboundCall } from "@/lib/voice/outbound";
 
 export type FormState = { error?: string; ok?: string } | null;
@@ -19,7 +20,7 @@ export async function callNow(_: FormState, fd: FormData): Promise<FormState> {
   if (!to) return { error: "Enter a phone number." };
   try {
     const [lead] = await db.select({ id: leads.id }).from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.phone, to.replace(/[^\d+]/g, ""))));
-    await startOutboundCall({ tenantId, to, objective, leadId: lead?.id });
+    await startOutboundCall({ tenantId, agentId: String(fd.get("agentId") || "") || null, to, objective, leadId: lead?.id });
   } catch (e) {
     return { error: msg(e) };
   }
@@ -33,6 +34,8 @@ export async function createCallCampaign(_: FormState, fd: FormData): Promise<Fo
   const objective = String(fd.get("objective") || "").trim();
   const audience = fd.get("audience") === "selected" ? "selected" : "all";
   if (!name || !objective) return { error: "Name and objective are required." };
+  const agent = await getAgent(tenantId, String(fd.get("agentId") || "") || null);
+  if (!agent) return { error: "Pick an agent." };
 
   const base = and(eq(leads.tenantId, tenantId), isNotNull(leads.phone), ne(leads.phone, ""));
   let leadIds: string[];
@@ -45,7 +48,7 @@ export async function createCallCampaign(_: FormState, fd: FormData): Promise<Fo
   if (!leadIds.length) return { error: "No leads with a phone number in this audience." };
 
   const id = await db.transaction(async (tx) => {
-    const [c] = await tx.insert(campaigns).values({ tenantId, type: "call", name, callObjective: objective, audience }).returning({ id: campaigns.id });
+    const [c] = await tx.insert(campaigns).values({ tenantId, agentId: agent.id, type: "call", name, callObjective: objective, audience }).returning({ id: campaigns.id });
     await tx.insert(campaignRecipients).values(leadIds.map((leadId) => ({ tenantId, campaignId: c.id, leadId })));
     return c.id;
   });
@@ -65,7 +68,7 @@ export async function startCallCampaign(_: FormState, fd: FormData): Promise<For
   const c = await ownCampaign(tenantId, id);
   if (!c) return { error: "Campaign not found." };
   try {
-    await assertVoiceReady(tenantId);
+    await assertVoiceReady(tenantId, c.agentId);
   } catch (e) {
     return { error: msg(e) };
   }
