@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useTransition, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { BookOpen, ChevronDown } from "lucide-react";
 import { Badge, Button, Card, Input, Label, Toggle } from "@/components/ui";
 import type { ProviderDef } from "./providers";
 import { disconnectProvider, saveProvider, setProviderEnabled } from "./actions";
@@ -18,6 +19,8 @@ export function ProviderCard({ def, connected, enabled, values, savedSecrets, ch
   const [state, action, saving] = useActionState(saveProvider.bind(null, def.id), {});
   const [busy, start] = useTransition();
   const form = useRef<HTMLFormElement>(null);
+  const [open, setOpen] = useState(false);
+  const docId = def.id === "meta_whatsapp" ? "whatsapp" : def.id;
 
   // Clear typed secrets after a successful save (masked placeholders take over).
   useEffect(() => {
@@ -26,22 +29,31 @@ export function ProviderCard({ def, connected, enabled, values, savedSecrets, ch
 
   return (
     <Card id={def.id} className="scroll-mt-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-medium text-zinc-900">{def.name}</h2>
-            <Badge tone={connected ? (enabled ? "green" : "amber") : "zinc"}>{connected ? (enabled ? "Connected" : "Disabled") : "Not connected"}</Badge>
-          </div>
-          <p className="mt-0.5 text-sm text-zinc-500">{def.description}</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-w-0 flex-1 items-start gap-2 text-left">
+          <ChevronDown size={18} aria-hidden className={`mt-0.5 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : "-rotate-90"}`} />
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-zinc-900">{def.name}</span>
+              <Badge tone={connected ? (enabled ? "green" : "amber") : "zinc"}>{connected ? (enabled ? "Connected" : "Disabled") : "Not connected"}</Badge>
+            </span>
+            <span className="mt-0.5 block text-sm text-zinc-500">{def.description}</span>
+          </span>
+        </button>
+        <div className="flex items-center gap-3 text-xs text-zinc-500">
+          <a href={`/documentation#${docId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline">
+            <BookOpen size={14} aria-hidden /> Learn how
+          </a>
+          {connected && (
+            <>
+              {enabled ? "Enabled" : "Disabled"}
+              <Toggle checked={enabled} disabled={busy} onChange={() => start(() => setProviderEnabled(def.id, !enabled))} aria-label={`Enable ${def.name}`} />
+            </>
+          )}
         </div>
-        {connected && (
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            {enabled ? "Enabled" : "Disabled"}
-            <Toggle checked={enabled} disabled={busy} onChange={() => start(() => setProviderEnabled(def.id, !enabled))} aria-label={`Enable ${def.name}`} />
-          </div>
-        )}
       </div>
 
+      <div hidden={!open} className="mt-4">
       <form
         ref={form}
         onSubmit={(e) => {
@@ -91,6 +103,7 @@ export function ProviderCard({ def, connected, enabled, values, savedSecrets, ch
       </form>
 
       {children && <div className="mt-5 space-y-3 border-t border-zinc-100 pt-4">{children}</div>}
+      </div>
     </Card>
   );
 }
