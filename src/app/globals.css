@@ -1,26 +1,71 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+  Design tokens.
+  One typeface (Hanken Grotesk), a green-grey neutral scale, and a single bottle-green brand colour.
+  No gradients, no decorative shadows: hierarchy comes from type weight, spacing and hairline rules.
+  The neutral scale replaces Tailwind's `zinc`, so every `zinc-*` class in the app uses it.
+*/
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-zinc-50: #f6f7f6;
+  --color-zinc-100: #eef0ef;
+  --color-zinc-200: #e0e4e2;
+  --color-zinc-300: #c9cfcc;
+  --color-zinc-400: #98a19d;
+  --color-zinc-500: #69736f;
+  --color-zinc-600: #4d5753;
+  --color-zinc-700: #38413d;
+  --color-zinc-800: #252b28;
+  --color-zinc-900: #161b19;
+  --color-zinc-950: #0c100e;
+
+  --color-brand-50: #edf4f1;
+  --color-brand-100: #d6e7e0;
+  --color-brand-200: #adcfc2;
+  --color-brand-500: #17705a;
+  --color-brand-600: #0f5b48;
+  --color-brand-700: #0b4737;
+  --color-brand-900: #072b22;
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #fff;
+  color: var(--color-zinc-900);
+  font-feature-settings: "ss01", "cv11";
+  text-rendering: optimizeLegibility;
+}
+
+/* Numbers in tables line up. */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-brand-100);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

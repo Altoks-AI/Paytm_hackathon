@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# media library files (MEDIA_DIR)
+/.media
+
+# keep the env template in git
+!.env.example
