@@ -7,6 +7,7 @@ import { agentSettings, agentTools, knowledgeItems } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
 import { ensureAgentSettings, newWidgetKey } from "@/lib/agent/settings";
 import { BUILTIN_TOOLS, saveCustomTool } from "@/lib/agent/custom-tools";
+import { AGENT_TEMPLATES } from "./templates";
 import { ALL_VOICES, LANGUAGE_CODES, type FormState, type ToolPayload } from "./options";
 
 const s = (f: FormData, k: string, max = 200) => String(f.get(k) ?? "").trim().slice(0, max);
@@ -33,6 +34,20 @@ export async function saveGeneral(_: FormState, form: FormData): Promise<FormSta
     basePrompt: s(form, "basePrompt", 8000),
     greeting: s(form, "greeting", 500) || "Hi! How can I help you today?",
     handoffPhone: phone || null,
+  });
+}
+
+export async function applyTemplate(templateId: string): Promise<FormState> {
+  const t = AGENT_TEMPLATES.find((x) => x.id === templateId);
+  if (!t) return fail("Unknown template");
+  return update({
+    agentName: t.agentName,
+    greeting: t.greeting,
+    basePrompt: t.basePrompt,
+    language: t.language,
+    extraLanguages: t.extraLanguages,
+    voice: t.voice,
+    disabledTools: BUILTIN_TOOLS.filter((b) => !t.tools.includes(b.name)).map((b) => b.name),
   });
 }
 

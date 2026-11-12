@@ -4,7 +4,8 @@ import { useActionState, useMemo, useState, useTransition, type ComponentProps, 
 import { useFormStatus } from "react-dom";
 import { Check, Plus, X } from "lucide-react";
 import { Badge, Button, Input, Label, Select, Textarea, Toggle } from "@/components/ui";
-import { deleteTool, saveTool, toggleTool } from "./actions";
+import { applyTemplate, deleteTool, saveTool, toggleTool } from "./actions";
+import { AGENT_TEMPLATES } from "./templates";
 import { LANGUAGES, type ClientTool, type FormState, type ModelOption, type ToolParamRow } from "./options";
 
 export function SubmitButton({ children, pendingText, ...p }: ComponentProps<typeof Button> & { pendingText?: string }) {
@@ -66,6 +67,40 @@ export function ActionForm({ action, children, submitLabel = "Save", extra, clas
         <SubmitButton>{submitLabel}</SubmitButton>
       </div>
     </form>
+  );
+}
+
+/* ---------- templates ---------- */
+
+export function TemplatePicker() {
+  const [busy, start] = useTransition();
+  const [res, setRes] = useState<FormState & { id?: string }>({});
+  return (
+    <div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {AGENT_TEMPLATES.map((t) => (
+          <div key={t.id} className="flex flex-col justify-between gap-3 rounded-lg border border-zinc-200 p-4">
+            <div>
+              <div className="text-sm font-medium text-zinc-900">{t.name}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">{t.tagline}</div>
+              <div className="mt-2 text-xs text-zinc-400">Telugu · Hindi · English</div>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                if (!confirm(`Apply "${t.name}"? This replaces your agent name, greeting, instructions, languages, voice and built-in tools. Your knowledge base, channels and webhook tools stay as they are.`)) return;
+                start(async () => setRes({ ...(await applyTemplate(t.id)), id: t.id }));
+              }}
+            >
+              {busy ? "Applying…" : res.ok && res.id === t.id ? "Applied" : "Use template"}
+            </Button>
+          </div>
+        ))}
+      </div>
+      {res.error && <p className="mt-2 text-sm text-red-600">{res.error}</p>}
+    </div>
   );
 }
 

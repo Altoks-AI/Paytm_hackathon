@@ -19,7 +19,7 @@ import {
   saveWidget,
   updateKnowledge,
 } from "./actions";
-import { ActionForm, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton } from "./client";
+import { ActionForm, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton, TemplatePicker } from "./client";
 import { getToolModels } from "./models";
 import { ALL_VOICES, VOICES, type ClientTool } from "./options";
 
@@ -100,8 +100,15 @@ async function AgentContent({ searchParams }: { searchParams: SP }) {
           </Link>
         ))}
       </nav>
-      {tab === "general" && <General s={settings} />}
-      {tab === "voice" && <LanguagesVoice s={settings} />}
+      {tab === "general" && (
+        <div key={settings.updatedAt.getTime()} className="space-y-6">
+          <Section title="Start from a template" description="Autofill the agent with a ready-made setup (Telugu first, Hindi and English optional), then customise anything below. Or skip this and build from scratch.">
+            <TemplatePicker />
+          </Section>
+          <General s={settings} />
+        </div>
+      )}
+      {tab === "voice" && <LanguagesVoice key={settings.updatedAt.getTime()} s={settings} />}
       {tab === "model" && <ModelTab s={settings} />}
       {tab === "tools" && <ToolsTab tenantId={tenantId} disabled={settings.disabledTools} />}
       {tab === "knowledge" && <Knowledge tenantId={tenantId} />}
