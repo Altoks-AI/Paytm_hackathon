@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { requireTenant } from "@/lib/tenant";
 import { appUrl } from "@/lib/tenant-data";
-import { Card, PageHeader } from "@/components/ui";
+import type { Metadata } from "next";
+import { Card } from "@/components/ui";
 
 const A = ({ href, children }: { href: string; children: ReactNode }) => (
   <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 underline underline-offset-2 hover:text-brand-900">
@@ -222,15 +222,22 @@ function guides(base: string): { group: string; items: Guide[] }[] {
   ];
 }
 
-export default async function DocumentationPage() {
-  await requireTenant();
+export const metadata: Metadata = { title: "Documentation" };
+
+export default function DocumentationPage() {
   const groups = guides(appUrl());
 
   return (
-    <>
-      <PageHeader title="Documentation" description="Step-by-step setup guides: where to get each credential and where to paste it." />
+    <div className="min-h-screen bg-white">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-4 sm:px-8">
+        <Link href="/" className="text-[1.0625rem] font-semibold tracking-[-0.02em] text-zinc-900">AgentDesk <span className="font-normal text-zinc-400">/ Docs</span></Link>
+        <Link href="/dashboard" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Dashboard</Link>
+      </header>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+      <h1 className="text-[1.625rem] font-semibold leading-tight tracking-[-0.02em] text-zinc-900">Documentation</h1>
+      <p className="mb-8 mt-1.5 max-w-2xl text-[0.9375rem] text-zinc-500">Step-by-step setup guides: where to get each credential and where to paste it.</p>
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
-        <nav className="top-6 hidden self-start text-sm lg:sticky lg:block">
+        <nav className="top-20 hidden max-h-[calc(100vh-6rem)] self-start overflow-y-auto text-sm lg:sticky lg:block">
           {groups.map((g) => (
             <div key={g.group} className="mb-4">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">{g.group}</p>
@@ -249,7 +256,7 @@ export default async function DocumentationPage() {
               <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">{g.group}</h2>
               <div className="space-y-4">
                 {g.items.map((i) => (
-                  <Card key={i.id} id={i.id} className="scroll-mt-6">
+                  <Card key={i.id} id={i.id} className="scroll-mt-20">
                     <h3 className="text-base font-semibold text-zinc-900">{i.title}</h3>
                     <p className="mt-1 text-sm text-zinc-500">{i.intro}</p>
                     {i.needs && (
@@ -276,6 +283,7 @@ export default async function DocumentationPage() {
           ))}
         </div>
       </div>
-    </>
+      </div>
+    </div>
   );
 }
