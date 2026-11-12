@@ -6,7 +6,7 @@ import { Check, Plus, X } from "lucide-react";
 import { Badge, Button, Input, Label, Select, Textarea, Toggle } from "@/components/ui";
 import { applyTemplate, deleteTool, saveTool, toggleTool } from "./actions";
 import { AGENT_TEMPLATES } from "./templates";
-import { LANGUAGES, type ClientTool, type FormState, type ModelOption, type ToolParamRow } from "./options";
+import { LANGUAGES, VOICE_OPTIONS, type ClientTool, type FormState, type ModelOption, type ToolParamRow } from "./options";
 
 export function SubmitButton({ children, pendingText, ...p }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
@@ -134,6 +134,35 @@ export function LanguagePicker({ language, extras }: { language: string; extras:
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- voice ---------- */
+
+export function VoicePicker({ value }: { value: string }) {
+  const [voice, setVoice] = useState(VOICE_OPTIONS.some((v) => v.id === value) ? value : VOICE_OPTIONS[0].id);
+  return (
+    <div>
+      <Label hint="Sarvam Bulbul v4 Flash">Voice</Label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {VOICE_OPTIONS.map((v) => {
+          const on = v.id === voice;
+          return (
+            <label key={v.id} className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 transition ${on ? "border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900" : "border-zinc-200 hover:border-zinc-400"}`}>
+              <input type="radio" name="voice" value={v.id} checked={on} onChange={() => setVoice(v.id)} className="sr-only" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-zinc-900">{v.name}</span>
+                <span className="block text-xs text-zinc-500">{v.style}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <Badge tone={v.gender === "Female" ? "blue" : "zinc"}>{v.gender}</Badge>
+                {on && <Check size={16} strokeWidth={2.25} aria-hidden className="text-zinc-900" />}
+              </span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );

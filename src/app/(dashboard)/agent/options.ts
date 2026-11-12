@@ -15,11 +15,7 @@ export const LANGUAGES: [code: string, label: string][] = [
 ];
 export const LANGUAGE_CODES = LANGUAGES.map(([c]) => c);
 
-export const VOICES: Record<string, string[]> = {
-  "bulbul:v3": "shubh aditya ritu priya neha rahul pooja rohan simran kavya amit dev ishita shreya ratan varun manan sumit roopa kabir aayan ashutosh advait anand tanya tarun sunny mani gokul vijay shruti suhani mohit kavitha rehan soham rupali".split(" "),
-  "bulbul:v2": "anushka manisha vidya arya abhilash karun hitesh".split(" "),
-};
-export const ALL_VOICES = Object.values(VOICES).flat();
+export { DEFAULT_VOICE, VOICE_IDS, VOICE_OPTIONS } from "@/lib/voices";
 
 export type FormState = { ok?: boolean; error?: string; at?: number };
 

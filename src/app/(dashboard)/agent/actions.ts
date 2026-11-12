@@ -8,7 +8,7 @@ import { requireTenant } from "@/lib/tenant";
 import { ensureAgentSettings, newWidgetKey } from "@/lib/agent/settings";
 import { BUILTIN_TOOLS, saveCustomTool } from "@/lib/agent/custom-tools";
 import { AGENT_TEMPLATES } from "./templates";
-import { ALL_VOICES, LANGUAGE_CODES, type FormState, type ToolPayload } from "./options";
+import { LANGUAGE_CODES, VOICE_IDS, type FormState, type ToolPayload } from "./options";
 
 const s = (f: FormData, k: string, max = 200) => String(f.get(k) ?? "").trim().slice(0, max);
 
@@ -56,7 +56,7 @@ export async function saveLanguageVoice(_: FormState, form: FormData): Promise<F
   if (!LANGUAGE_CODES.includes(language)) return fail("Pick a default language");
   const extraLanguages = [...new Set(form.getAll("extraLanguages").map(String))].filter((c) => c !== language && LANGUAGE_CODES.includes(c));
   const voice = s(form, "voice", 40);
-  if (!ALL_VOICES.includes(voice)) return fail("Pick a voice");
+  if (!VOICE_IDS.includes(voice)) return fail("Pick a voice");
   return update({ language, extraLanguages, voice });
 }
 

@@ -1,12 +1,13 @@
 // Sarvam AI speech APIs (https://docs.sarvam.ai). Auth header: api-subscription-key.
+import { DEFAULT_VOICE, TTS_MODEL, VOICE_IDS } from "@/lib/voices";
+
 const BASE = "https://api.sarvam.ai";
 
 const LANGS = ["bn-IN", "en-IN", "gu-IN", "hi-IN", "kn-IN", "ml-IN", "mr-IN", "od-IN", "pa-IN", "ta-IN", "te-IN"];
 const V3_SPEAKERS = new Set(
   "shubh aditya ritu priya neha rahul pooja rohan simran kavya amit dev ishita shreya ratan varun manan sumit roopa kabir aayan ashutosh advait anand tanya tarun sunny mani gokul vijay shruti suhani mohit kavitha rehan soham rupali".split(" ")
 );
-const V2_SPEAKERS = new Set(["anushka", "manisha", "vidya", "arya", "abhilash", "karun", "hitesh"]);
-const TTS_MAX = 1500; // bulbul:v2 limit (v3 allows 2500); we chunk at the lower bound
+const TTS_MAX = 1500; // conservative chunk size (REST allows 2500)
 
 function apiKey() {
   const k = process.env.SARVAM_API_KEY;
@@ -18,12 +19,12 @@ export function normalizeLanguage(code?: string | null) {
   return code && LANGS.includes(code) ? code : "en-IN";
 }
 
-/** Pick model + speaker: v3 speakers → bulbul:v3, v2 speakers → bulbul:v2, otherwise default v3 "shubh". */
+/** Pick model + speaker: v4 persona ids → bulbul:v4-flash; legacy v3 names saved earlier → bulbul:v3; anything else → default v4 voice. */
 export function resolveVoice(speaker?: string | null): { model: string; speaker: string } {
   const s = (speaker || "").trim().toLowerCase();
+  if (VOICE_IDS.includes(s)) return { model: TTS_MODEL, speaker: s };
   if (V3_SPEAKERS.has(s)) return { model: "bulbul:v3", speaker: s };
-  if (V2_SPEAKERS.has(s)) return { model: "bulbul:v2", speaker: s };
-  return { model: "bulbul:v3", speaker: "shubh" };
+  return { model: TTS_MODEL, speaker: DEFAULT_VOICE };
 }
 
 export async function speechToText(audio: Buffer | ArrayBuffer, mime = "audio/wav", languageCode?: string): Promise<string> {

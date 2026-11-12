@@ -48,7 +48,7 @@ HOW TO SELL
 ${LANG}
 
 ${RULES}`,
-    voice: "priya",
+    voice: "pooja_te_conversation",
     language: "te-IN",
     extraLanguages: ["hi-IN", "en-IN"],
     tools: ["capture_lead", "book_appointment", "request_handoff", "end_conversation"],
@@ -76,7 +76,7 @@ BOOKING FLOW
 ${LANG}
 
 ${RULES}`,
-    voice: "kavya",
+    voice: "kavitha_te_conversation",
     language: "te-IN",
     extraLanguages: ["hi-IN", "en-IN"],
     tools: ["book_appointment", "check_appointments", "cancel_appointment", "capture_lead", "request_handoff", "end_conversation"],
@@ -102,7 +102,7 @@ HOW TO SUPPORT
 ${LANG}
 
 ${RULES}`,
-    voice: "shubh",
+    voice: "tarun_te_narration",
     language: "te-IN",
     extraLanguages: ["hi-IN", "en-IN"],
     tools: ["capture_lead", "request_handoff", "end_conversation"],

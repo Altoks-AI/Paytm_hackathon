@@ -6,7 +6,7 @@ import { integrations, knowledgeItems } from "@/db/schema";
 import { appUrl, getAgentSettings, requireTenant } from "@/lib/tenant";
 import { ensureAgentSettings } from "@/lib/agent/settings";
 import { BUILTIN_TOOLS, TOOL_METHODS, headerNames, listCustomTools } from "@/lib/agent/custom-tools";
-import { Badge, Card, Empty, Input, Label, PageHeader, Select, Textarea, Toggle } from "@/components/ui";
+import { Badge, Card, Empty, Input, Label, PageHeader, Textarea, Toggle } from "@/components/ui";
 import {
   addKnowledge,
   deleteKnowledge,
@@ -19,9 +19,9 @@ import {
   saveWidget,
   updateKnowledge,
 } from "./actions";
-import { ActionForm, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton, TemplatePicker } from "./client";
+import { ActionForm, ConfirmButton, CopyButton, CustomTools, LanguagePicker, ModelPicker, SubmitButton, TemplatePicker, VoicePicker } from "./client";
 import { getToolModels } from "./models";
-import { ALL_VOICES, VOICES, type ClientTool } from "./options";
+import type { ClientTool } from "./options";
 
 const TABS = [
   ["general", "General"],
@@ -152,20 +152,7 @@ function LanguagesVoice({ s }: { s: Settings }) {
     <Section title="Languages & Voice" description="The agent starts in the default language and switches when the customer speaks one of the additional languages.">
       <ActionForm action={saveLanguageVoice}>
         <LanguagePicker language={s.language} extras={s.extraLanguages} />
-        <div className="max-w-xs">
-          <Label hint="Sarvam TTS speaker">Voice</Label>
-          <Select name="voice" defaultValue={ALL_VOICES.includes(s.voice) ? s.voice : "anushka"}>
-            {Object.entries(VOICES).map(([model, voices]) => (
-              <optgroup key={model} label={model}>
-                {voices.map((v) => (
-                  <option key={v} value={v}>
-                    {v[0].toUpperCase() + v.slice(1)}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
-        </div>
+        <VoicePicker value={s.voice} />
       </ActionForm>
     </Section>
   );
