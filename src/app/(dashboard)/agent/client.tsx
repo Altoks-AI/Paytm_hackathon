@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useActionState, useContext, useMemo, useState, useTransition, type ComponentProps, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, useMemo, useState, useTransition, type ComponentProps, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { Check, Copy, Plus, Trash2, X } from "lucide-react";
@@ -86,10 +86,11 @@ export function AgentSwitcher({ agents, current, tab }: { agents: AgentOpt[]; cu
   );
 }
 
-export function SubmitButton({ children, pendingText, ...p }: ComponentProps<typeof Button> & { pendingText?: string }) {
-  const { pending } = useFormStatus();
+export function SubmitButton({ children, pendingText, busy, ...p }: ComponentProps<typeof Button> & { pendingText?: string; busy?: boolean }) {
+  const status = useFormStatus();
+  const pending = status.pending || !!busy;
   return (
-    <Button type="submit" disabled={pending || p.disabled} {...p}>
+    <Button type="submit" {...p} disabled={pending || p.disabled}>
       {pending ? pendingText ?? "Saving…" : children}
     </Button>
   );
@@ -127,24 +128,38 @@ export function ConfirmButton({ message, children, ...p }: ComponentProps<typeof
   );
 }
 
-function Status({ state }: { state: FormState }) {
+function Status({ state, okLabel = "Saved" }: { state: FormState; okLabel?: string }) {
   if (state.error) return <span className="text-sm text-red-600">{state.error}</span>;
-  if (state.ok) return <span key={state.at} className="inline-flex items-center gap-1 text-sm text-emerald-600">Saved <Check size={14} strokeWidth={2} aria-hidden /></span>;
+  if (state.ok) return <span key={state.at} className="inline-flex items-center gap-1 text-sm text-emerald-600">{okLabel} <Check size={14} strokeWidth={2} aria-hidden /></span>;
   return null;
 }
 
 /** A section form that saves independently and shows saved / error state next to its button. */
-export function ActionForm({ action, children, submitLabel = "Save", extra, className }: { action: (s: FormState, f: FormData) => Promise<FormState>; children: ReactNode; submitLabel?: string; extra?: ReactNode; className?: string }) {
-  const [state, formAction] = useActionState(action, {});
+export function ActionForm({ action, children, submitLabel = "Save", okLabel, extra, className }: { action: (s: FormState, f: FormData) => Promise<FormState>; children: ReactNode; submitLabel?: string; okLabel?: string; extra?: ReactNode; className?: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
   const agentId = useContext(AgentCtx);
   return (
-    <form action={formAction} className={className ?? "space-y-5"}>
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        // Submit manually so React doesn't reset the fields to their initial values after saving
+        // (buttons with their own formAction, e.g. "Regenerate key", keep the default behaviour).
+        const submitter = (e.nativeEvent as SubmitEvent).submitter;
+        if (submitter && !submitter.hasAttribute("data-main")) return;
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => formAction(fd));
+      }}
+      className={className ?? "space-y-5"}
+    >
       <input type="hidden" name="agentId" value={agentId} />
       {children}
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-100 pt-4">
-        <Status state={state} />
+        <Status state={state} okLabel={okLabel} />
         {extra}
-        <SubmitButton>{submitLabel}</SubmitButton>
+        <SubmitButton data-main busy={pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );

@@ -19,7 +19,7 @@ export async function assertVoiceReady(tenantId: string, agentId?: string | null
   return { cfg: { ...cfg, phoneNumber: from }, agent };
 }
 
-export async function startOutboundCall(opts: { tenantId: string; agentId?: string | null; to: string; leadId?: string; campaignId?: string; objective: string }) {
+export async function startOutboundCall(opts: { tenantId: string; agentId?: string | null; to: string; leadId?: string; campaignId?: string; objective: string; variables?: Record<string, string> }) {
   const { cfg, agent } = await assertVoiceReady(opts.tenantId, opts.agentId);
   const to = opts.to.replace(/[^\d+]/g, "");
   if (!/^\+\d{8,15}$/.test(to)) throw new Error(`Invalid phone number "${opts.to}" (use E.164, e.g. +919876543210)`);
@@ -38,6 +38,7 @@ export async function startOutboundCall(opts: { tenantId: string; agentId?: stri
       campaignId: opts.campaignId ?? null,
       leadId: opts.leadId ?? null,
       objective: opts.objective,
+      variables: opts.variables ?? {},
     })
     .returning();
   try {

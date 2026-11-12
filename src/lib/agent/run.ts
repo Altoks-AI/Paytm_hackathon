@@ -7,6 +7,7 @@ import type { RunAgentInput, RunAgentResult } from "./types";
 import { AGENT_GUARDRAILS } from "@/lib/guardrails";
 import { executeTool, loadTools, type ToolContext } from "./tools";
 import { TZ, tzOffset } from "./time";
+import { fillVariables } from "./variables";
 
 const MAX_ROUNDS = 4;
 const HISTORY = 20;
@@ -33,7 +34,7 @@ function languageRule(settings: Awaited<ReturnType<typeof getAgentSettings>>) {
   return `Your default language is ${def}. If the customer writes or speaks in one of these, switch and reply in it: ${extra.join(", ")}. For any other language, reply in ${def}.`;
 }
 
-async function buildSystemPrompt(input: RunAgentInput, settings: Awaited<ReturnType<typeof getAgentSettings>>) {
+async function buildSystemPrompt(input: RunAgentInput, settings: Awaited<ReturnType<typeof getAgentSettings>>, vars: Record<string, string> = {}) {
   const [tenant, kb] = await Promise.all([
     getTenant(input.tenantId),
     settings ? db.select().from(knowledgeItems).where(and(eq(knowledgeItems.tenantId, input.tenantId), eq(knowledgeItems.agentId, settings.id))).orderBy(asc(knowledgeItems.createdAt)) : Promise.resolve([]),
@@ -64,7 +65,7 @@ async function buildSystemPrompt(input: RunAgentInput, settings: Awaited<ReturnT
   return [
     `You are ${settings?.agentName || "Assistant"}, the AI assistant for ${tenant?.name ?? "the company"}. You help customers with support, FAQs and appointment booking.`,
     `## Company\n${company}`,
-    settings?.basePrompt?.trim() && `## Instructions from the company\n${settings.basePrompt.trim()}`,
+    settings?.basePrompt?.trim() && `## Instructions from the company\n${fillVariables(settings.basePrompt.trim(), vars)}`,
     `## Knowledge base\n${kbText.trim() || "(empty)"}`,
     `## Current date/time\n${nowStr} (timezone ${TZ}, UTC${tzOffset(now)}). Use this offset for appointment datetimes.`,
     `## Channel\n${channelBlock(input)}`,
@@ -113,7 +114,11 @@ export async function buildRun(input: RunAgentInput, prep: Prepared) {
   const { tenantId, conversationId, channel } = input;
   const settings = await getAgentSettings(tenantId, prep.ctx.conversation.agentId);
   const [system, history, tools] = await Promise.all([
-    buildSystemPrompt(input, settings),
+    buildSystemPrompt(input, settings, {
+      customer_name: prep.ctx.conversation.customerName ?? "",
+      customer_phone: prep.ctx.conversation.customerPhone ?? "",
+      ...(prep.ctx.conversation.variables ?? {}),
+    }),
     db.select().from(messages).where(and(eq(messages.conversationId, conversationId), eq(messages.tenantId, tenantId))).orderBy(desc(messages.createdAt)).limit(HISTORY),
     loadTools(tenantId, settings?.id ?? null, settings?.disabledTools ?? []),
   ]);

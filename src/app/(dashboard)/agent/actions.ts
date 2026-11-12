@@ -11,6 +11,8 @@ import { BUILTIN_TOOLS, saveCustomTool } from "@/lib/agent/custom-tools";
 import { configureNumberWebhook, listTwilioNumbers } from "@/lib/voice/numbers";
 import { listWhatsAppNumbers } from "@/lib/whatsapp-numbers";
 import { AGENT_TEMPLATES } from "./templates";
+import { startOutboundCall } from "@/lib/voice/outbound";
+import { AUTO_VARIABLES, extractVariables, variableLabel } from "@/lib/agent/variables";
 import { LANGUAGE_CODES, VOICE_IDS, type FormState, type ToolPayload } from "./options";
 
 const s = (f: FormData, k: string, max = 200) => String(f.get(k) ?? "").trim().slice(0, max);
@@ -187,6 +189,39 @@ export async function regenerateWidgetKey(form: FormData) {
   const { tenantId, agent } = await ownAgent(form.get("agentId"));
   await db.update(agents).set({ widgetKey: newWidgetKey(), updatedAt: new Date() }).where(and(eq(agents.id, agent.id), eq(agents.tenantId, tenantId)));
   revalidatePath("/agent");
+}
+
+/* ---------- test call ---------- */
+
+export async function testCall(_: FormState, form: FormData): Promise<FormState> {
+  let ctx;
+  try {
+    ctx = await ownAgent(form.get("agentId"));
+  } catch {
+    return fail("Agent not found");
+  }
+  const { tenantId, agent } = ctx;
+  const to = s(form, "to", 30).replace(/[^\d+]/g, "");
+  if (!/^\+\d{8,15}$/.test(to)) return fail("Enter the number with country code, e.g. +919876543210");
+  const variables: Record<string, string> = {};
+  for (const name of extractVariables(agent.basePrompt, agent.greeting)) {
+    const v = s(form, `var_${name}`, 500);
+    if (!v && !AUTO_VARIABLES.includes(name)) return fail(`Fill in "${variableLabel(name)}"`);
+    if (v) variables[name] = v;
+  }
+  try {
+    await startOutboundCall({
+      tenantId,
+      agentId: agent.id,
+      to,
+      objective: s(form, "objective", 1000) || "This is a test call. Behave exactly as you would with a real customer.",
+      variables,
+    });
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Could not place the call");
+  }
+  revalidatePath("/agent");
+  return { ok: true, at: Date.now() };
 }
 
 /* ---------- custom webhook tools ---------- */

@@ -182,6 +182,7 @@ export const conversations = pgTable("conversations", {
   customerName: text("customer_name"),
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
   status: text("status").notNull().default("open"), // open | handoff | closed  (handoff => agent stops replying)
+  variables: jsonb("variables").$type<Record<string, string>>().notNull().default({}), // values for {{variables}} in the agent prompt
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("conversations_tenant").on(t.tenantId, t.channel, t.externalId)]);
@@ -269,6 +270,7 @@ export const calls = pgTable("calls", {
   campaignId: uuid("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
   leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
   objective: text("objective"),
+  variables: jsonb("variables").$type<Record<string, string>>().notNull().default({}), // values for {{variables}} (e.g. from a test call)
   durationSec: integer("duration_sec"),
   recordingSid: text("recording_sid"),
   recordingUrl: text("recording_url"), // Twilio recording resource URL (append .mp3); played via /api/calls/{id}/recording

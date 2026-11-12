@@ -10,6 +10,7 @@ import { forbidden, hangup, isValidTwilio, readTwilioForm, speakAndListen } from
 import { voiceCtx } from "@/lib/voice/session";
 import { realtimeEnabled, streamTwiml } from "@/lib/voice/stream-token";
 import { startRecording } from "@/lib/voice/recording";
+import { fillVariables } from "@/lib/agent/variables";
 
 export async function POST(req: NextRequest) {
   const p = await readTwilioForm(req);
@@ -32,5 +33,5 @@ export async function POST(req: NextRequest) {
 
   startRecording(tenant.tenantId, call.id, p.CallSid);
   if (realtimeEnabled()) return streamTwiml(call.id, p.CallSid);
-  return speakAndListen(settings.greeting || "Hi! How can I help you today?", voiceCtx(settings), call.id);
+  return speakAndListen(fillVariables(settings.greeting || "Hi! How can I help you today?", { customer_phone: p.From ?? "" }), voiceCtx(settings), call.id);
 }

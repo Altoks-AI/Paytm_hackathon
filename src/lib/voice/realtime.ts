@@ -7,6 +7,7 @@ import { appUrl } from "@/lib/tenant-data";
 import { runAgentStream } from "@/lib/agent/stream";
 import type { RunAgentResult } from "@/lib/agent/types";
 import { loadCall } from "./session";
+import { fillVariables } from "@/lib/agent/variables";
 import { verifyStreamToken } from "./stream-token";
 
 const SARVAM_WS = "wss://api.sarvam.ai";
@@ -466,7 +467,7 @@ class CallSession {
     this.timers.push(setTimeout(() => void this.finishWith("We've reached the maximum call length. Thank you for calling. Goodbye."), MAX_CALL_MS));
 
     if (loaded.call.direction === "outbound") void this.runTurn({});
-    else void this.runTurn({ text: s?.greeting || "Hi! How can I help you today?" });
+    else void this.runTurn({ text: fillVariables(s?.greeting || "Hi! How can I help you today?", { customer_phone: loaded.call.fromNumber ?? "" }) });
   }
 
   private tick() {

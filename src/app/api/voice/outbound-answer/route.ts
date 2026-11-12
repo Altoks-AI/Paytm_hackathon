@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   const conversation = await getOrCreateConversation({
     tenantId: call.tenantId,
     agentId: call.agentId,
+    variables: call.variables,
     channel: "voice",
     externalId: p.CallSid,
     customerPhone: call.toNumber ?? undefined,

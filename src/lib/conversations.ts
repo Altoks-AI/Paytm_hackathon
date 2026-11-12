@@ -11,6 +11,8 @@ export async function getOrCreateConversation(input: {
   customerName?: string;
   /** agent that handles this conversation (new conversations only) */
   agentId?: string | null;
+  /** values for {{variables}} in the agent prompt (new conversations only) */
+  variables?: Record<string, string>;
 }) {
   const { tenantId, channel, externalId } = input;
   const [existing] = await db
@@ -32,7 +34,7 @@ export async function getOrCreateConversation(input: {
   }
   const [created] = await db
     .insert(conversations)
-    .values({ tenantId, agentId: input.agentId ?? null, channel, externalId, customerPhone: input.customerPhone ?? null, customerName: input.customerName ?? null })
+    .values({ tenantId, agentId: input.agentId ?? null, variables: input.variables ?? {}, channel, externalId, customerPhone: input.customerPhone ?? null, customerName: input.customerName ?? null })
     .returning();
   return created;
 }
