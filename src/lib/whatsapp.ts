@@ -49,3 +49,19 @@ export async function sendWhatsAppTemplate(
     },
   }, fromId);
 }
+
+/** Marks an incoming message as read (blue ticks) and shows "typing…" until we reply (max ~25s). */
+export async function markReadAndTyping(tenantId: string, messageId: string, fromId?: string | null): Promise<void> {
+  try {
+    const cfg = await getIntegration(tenantId, "meta_whatsapp");
+    if (!cfg?.phoneNumberId || !cfg.accessToken) return;
+    const res = await fetch(`${GRAPH}/${fromId || cfg.phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${cfg.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: messageId, typing_indicator: { type: "text" } }),
+    });
+    if (!res.ok) console.warn("whatsapp mark-read failed", await res.text().catch(() => res.status));
+  } catch (e) {
+    console.warn("whatsapp mark-read failed", e);
+  }
+}

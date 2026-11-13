@@ -8,7 +8,7 @@ import { findTenantByLookup, getIntegration, type ProviderConfig } from "@/lib/i
 import { findAgentByWhatsAppId, whatsappAgent } from "@/lib/agents";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { runAgent } from "@/lib/agent/run";
-import { sendWhatsAppText } from "@/lib/whatsapp";
+import { markReadAndTyping, sendWhatsAppText } from "@/lib/whatsapp";
 import { chargeCredits, hasCredits } from "@/lib/credits";
 import { mediaToText, type WaMedia } from "@/lib/whatsapp-media";
 
@@ -115,6 +115,7 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
   if (!settings) return;
   for (const m of value.messages) {
     if (!firstTime(m.id)) continue;
+    await markReadAndTyping(tenantId, m.id, phoneNumberId);
     // Multilingual agents: let Sarvam auto-detect the voice-note language.
     const text = (await messageText(m, tenantId, settings.extraLanguages.length ? undefined : settings.language)).trim();
     // Reply to the phone number when present, otherwise to the BSUID.
