@@ -1,6 +1,7 @@
 import { getIntegration } from "@/lib/integrations";
 import { transcribe } from "@/lib/sarvam";
 import { GRAPH } from "@/lib/wa-templates";
+import { saveAttachment, type Attachment } from "@/lib/media/attachments";
 
 // Turns inbound WhatsApp media into text the agent can read:
 // voice notes/audio → Sarvam STT; images and PDFs → a vision-capable LLM on OpenRouter.
@@ -55,11 +56,23 @@ async function readWithLlm(bytes: Buffer, mime: string, filename: string): Promi
   return String(data.choices?.[0]?.message?.content ?? "").trim();
 }
 
-/** Text version of an inbound media message for the agent. Never throws. */
-export async function mediaToText(tenantId: string, kind: "audio" | "image" | "document", media: WaMedia, language?: string): Promise<string> {
+/** Text version of an inbound media message for the agent, plus the saved file. Never throws. */
+export async function mediaToText(tenantId: string, kind: "audio" | "image" | "document", media: WaMedia, language?: string): Promise<{ text: string; attachment?: Attachment }> {
+  let attachment: Attachment | undefined;
+  const text = await describe();
+  return { text, attachment };
+
+  async function describe(): Promise<string> {
   const caption = media.caption?.trim() ? `\nCustomer's caption: ${media.caption.trim()}` : "";
   try {
     const file = await download(tenantId, media.id);
+    if (file) {
+      try {
+        attachment = await saveAttachment(tenantId, kind, file.mime, file.bytes, media.filename);
+      } catch (e) {
+        console.error("whatsapp media save failed", kind, e);
+      }
+    }
     if (!file) return `[The customer sent ${kind === "audio" ? "a voice message" : `a ${kind}`} that could not be downloaded. Ask them to resend it or type it out.]${caption}`;
     if (kind === "audio") {
       const { transcript } = await transcribe(file.bytes, file.mime, language);
@@ -77,4 +90,5 @@ export async function mediaToText(tenantId: string, kind: "audio" | "image" | "d
     console.error("whatsapp media failed", kind, e);
     return `[The customer sent ${kind === "audio" ? "a voice message" : `a ${kind}`} that could not be read. Ask them to type the details or resend.]${caption}`;
   }
+}
 }

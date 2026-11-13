@@ -11,6 +11,7 @@ import { runAgent } from "@/lib/agent/run";
 import { markReadAndTyping, sendWhatsAppText } from "@/lib/whatsapp";
 import { chargeCredits, hasCredits } from "@/lib/credits";
 import { mediaToText, type WaMedia } from "@/lib/whatsapp-media";
+import type { Attachment } from "@/lib/media/attachments";
 
 type WaConfig = ProviderConfig["meta_whatsapp"];
 
@@ -73,13 +74,17 @@ type WaValue = {
 };
 
 /** Text for the agent. Voice notes go through Sarvam STT; images and PDFs are read by a vision LLM. */
-async function messageText(m: WaMessage, tenantId: string, sttLanguage?: string) {
-  if (m.type === "text") return m.text?.body ?? "";
-  if (m.type === "button") return m.button?.text ?? "";
-  if (m.type === "interactive") return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? "";
+async function messageText(m: WaMessage, tenantId: string, sttLanguage?: string): Promise<{ text: string; attachment?: Attachment }> {
   if (m.type === "audio" && m.audio) return mediaToText(tenantId, "audio", m.audio, sttLanguage);
   if (m.type === "image" && m.image) return mediaToText(tenantId, "image", m.image);
   if (m.type === "document" && m.document) return mediaToText(tenantId, "document", m.document);
+  return { text: plainText(m) };
+}
+
+function plainText(m: WaMessage): string {
+  if (m.type === "text") return m.text?.body ?? "";
+  if (m.type === "button") return m.button?.text ?? "";
+  if (m.type === "interactive") return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? "";
   if (m.type === "location" && m.location) {
     const l = m.location;
     return `[The customer shared a location: ${[l.name, l.address].filter(Boolean).join(", ") || "pin"} (${l.latitude}, ${l.longitude})]`;
@@ -117,7 +122,8 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
     if (!firstTime(m.id)) continue;
     await markReadAndTyping(tenantId, m.id, phoneNumberId);
     // Multilingual agents: let Sarvam auto-detect the voice-note language.
-    const text = (await messageText(m, tenantId, settings.extraLanguages.length ? undefined : settings.language)).trim();
+    const msg = await messageText(m, tenantId, settings.extraLanguages.length ? undefined : settings.language);
+    const text = msg.text.trim();
     // Reply to the phone number when present, otherwise to the BSUID.
     const sender = m.from || m.from_user_id;
     if (!text || !sender) continue;
@@ -127,7 +133,7 @@ async function handleValue(value: WaValue, raw: string, signature: string | null
       console.warn("whatsapp: tenant out of credits", tenantId);
       continue;
     }
-    const { reply } = await runAgent({ tenantId, conversationId: conversation.id, channel: "whatsapp", userMessage: text });
+    const { reply } = await runAgent({ tenantId, conversationId: conversation.id, channel: "whatsapp", userMessage: text, attachment: msg.attachment });
     if (reply) {
       await chargeCredits(tenantId, "whatsapp_message", { note: `Reply to ${m.from ? `+${m.from}` : sender}`, allowNegative: true });
       const r = await sendWhatsAppText(tenantId, sender, reply, phoneNumberId);

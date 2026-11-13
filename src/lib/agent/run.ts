@@ -98,7 +98,7 @@ export async function startRun(input: RunAgentInput): Promise<Prepared | { resul
 
   const userMessage = input.userMessage?.trim() || undefined;
   if (userMessage) {
-    await db.insert(messages).values({ tenantId, conversationId, role: "user", content: userMessage });
+    await db.insert(messages).values({ tenantId, conversationId, role: "user", content: userMessage, attachment: input.attachment ?? null });
   }
   const touch = () => db.update(conversations).set({ updatedAt: new Date() }).where(and(eq(conversations.id, conversationId), eq(conversations.tenantId, tenantId)));
 

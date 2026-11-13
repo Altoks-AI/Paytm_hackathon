@@ -1,3 +1,4 @@
+import type { Attachment } from "@/lib/media/attachments";
 import type { Channel } from "@/db/schema";
 
 /**
@@ -11,6 +12,8 @@ export type RunAgentInput = {
   channel: Channel;
   /** Customer's message (or transcribed speech). Omit to have the agent open the conversation (outbound call first line). */
   userMessage?: string;
+  /** File the customer sent with this message (saved to storage); userMessage holds its transcription. */
+  attachment?: Attachment;
   /** voice only */
   callDirection?: "inbound" | "outbound";
   /** outbound call objective (from a call campaign) */

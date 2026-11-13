@@ -12,6 +12,7 @@ import { SubmitButton } from "../../agent/client";
 import { channelLabel, statusTone } from "../format";
 import { sendReply, setConversationStatus } from "../actions";
 import { AutoRefresh } from "./refresher";
+import type { Attachment } from "@/lib/media/attachments";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> };
 
@@ -103,7 +104,17 @@ async function ConversationContent({ params, searchParams }: Props) {
                 <div className="mb-0.5 text-xs text-zinc-400">
                   {r.label} · {formatDateTime(m.createdAt)}
                 </div>
-                <div className={`max-w-[90%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl sm:max-w-[80%] px-3.5 py-2 text-sm ${r.cls}`}>{m.content}</div>
+                {m.attachment ? (
+                  <div className={`max-w-[90%] space-y-2 rounded-2xl sm:max-w-[80%] px-3.5 py-2 text-sm ${r.cls}`}>
+                    <AttachmentView a={m.attachment} />
+                    <details>
+                      <summary className="cursor-pointer select-none text-xs text-zinc-500 hover:text-zinc-800">{m.attachment.kind === "audio" ? "Show transcription" : "Show extracted text"}</summary>
+                      <div className="mt-1.5 whitespace-pre-wrap [overflow-wrap:anywhere] text-zinc-700">{m.content}</div>
+                    </details>
+                  </div>
+                ) : (
+                  <div className={`max-w-[90%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl sm:max-w-[80%] px-3.5 py-2 text-sm ${r.cls}`}>{m.content}</div>
+                )}
               </div>
             );
           })
@@ -124,6 +135,26 @@ async function ConversationContent({ params, searchParams }: Props) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+function AttachmentView({ a }: { a: Attachment }) {
+  const src = `/api/attachments/${a.id}`;
+  if (a.kind === "image")
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={a.filename || "Image from customer"} className="max-h-72 max-w-full rounded-lg border border-zinc-200 object-contain" />
+      </a>
+    );
+  if (a.kind === "audio") return <audio controls preload="none" src={src} className="h-9 w-72 max-w-full" />;
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="font-medium text-zinc-900">📄 {a.filename || "Document"}</span>
+      <span className="text-xs text-zinc-500">{Math.max(1, Math.round(a.size / 1024))} KB</span>
+      <a href={src} target="_blank" rel="noreferrer" className="text-xs underline">Open</a>
+      <a href={`${src}?download=1`} className="text-xs underline">Download</a>
     </div>
   );
 }

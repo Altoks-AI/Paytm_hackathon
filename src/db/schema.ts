@@ -1,3 +1,4 @@
+import type { Attachment } from "@/lib/media/attachments";
 import { pgTable, uuid, text, boolean, timestamp, jsonb, integer, real, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().defaultRandom();
@@ -192,7 +193,8 @@ export const messages = pgTable("messages", {
   tenantId: tenantId(),
   conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   role: text("role").notNull(), // user | assistant | human (dashboard staff) | system
-  content: text("content").notNull(),
+  content: text("content").notNull(), // for media messages: the transcription / extracted text the agent reads
+  attachment: jsonb("attachment").$type<Attachment>(), // file the customer sent (WhatsApp image / PDF / voice note)
   createdAt: createdAt(),
 }, (t) => [index("messages_conversation").on(t.conversationId, t.createdAt)]);
 
