@@ -2,7 +2,7 @@
 // Paths are only ever built from validated ids (uuid tenant id, hex public id) and an allow-listed mime.
 import { randomBytes } from "crypto";
 import { createReadStream, createWriteStream } from "fs";
-import { mkdir, open, rm, stat, writeFile } from "fs/promises";
+import { mkdir, open, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import { Readable, Transform } from "stream";
 import { pipeline } from "stream/promises";
@@ -75,6 +75,8 @@ export async function saveStream(tenantId: string, publicId: string, mime: strin
   }
   return size;
 }
+
+export const readBuffer = (tenantId: string, publicId: string, mime: string) => readFile(mediaPath(tenantId, publicId, mime));
 
 /** First n bytes of a stored file (for content sniffing). */
 export async function readHead(tenantId: string, publicId: string, mime: string, n = 16) {

@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { mediaFiles } from "@/db/schema";
 import { generateImage, generateVideo, getImageModelPrice, listGenerationModels, refreshPendingMedia, type GenModel, type GenResult, type MediaKind } from "@/lib/media/generate";
-import { deleteFile } from "@/lib/media/storage";
+import { isMediaMime, deleteFile } from "@/lib/media/storage";
+import { MAX_REFERENCE_IMAGE_BYTES, MAX_REFERENCES, REFERENCE_IMAGE_MIMES, requiresReference } from "@/lib/media/references";
 import { appUrl, requireTenant } from "@/lib/tenant";
 
 export async function getModels(kind: MediaKind): Promise<GenModel[]> {
@@ -18,9 +19,17 @@ export async function getModelPrice(model: string): Promise<string | null> {
   return getImageModelPrice(String(model));
 }
 
-export async function generateMedia(input: { kind: MediaKind; prompt: string; model: string; aspectRatio?: string; duration?: number; resolution?: string; useContext?: boolean }): Promise<GenResult> {
+export async function generateMedia(input: { kind: MediaKind; prompt: string; model: string; aspectRatio?: string; duration?: number; resolution?: string; useContext?: boolean; referenceIds?: string[] }): Promise<GenResult> {
   const { tenantId } = await requireTenant();
-  const common = { tenantId, prompt: String(input.prompt ?? ""), model: String(input.model ?? ""), aspectRatio: input.aspectRatio ? String(input.aspectRatio) : undefined, useContext: !!input.useContext };
+  const ids = [...new Set((Array.isArray(input.referenceIds) ? input.referenceIds : []).map(String))];
+  if (ids.length > MAX_REFERENCES) return { ok: false, error: `You can attach up to ${MAX_REFERENCES} references` };
+  if (ids.some((i) => !/^[0-9a-f-]{36}$/i.test(i))) return { ok: false, error: "Invalid reference" };
+  const rows = ids.length ? await db.select().from(mediaFiles).where(and(eq(mediaFiles.tenantId, tenantId), eq(mediaFiles.status, "ready"), inArray(mediaFiles.id, ids))) : [];
+  if (rows.length !== ids.length) return { ok: false, error: "A reference file was not found in your library" };
+  const references = ids.map((i) => rows.find((r) => r.id === i)!);
+  const bad = references.find((r) => !REFERENCE_IMAGE_MIMES.includes(r.mime) || !isMediaMime(r.mime) || r.sizeBytes > MAX_REFERENCE_IMAGE_BYTES);
+  if (bad) return { ok: false, error: "References must be PNG, JPEG or WebP images up to 20 MB" };
+  const common = { tenantId, prompt: String(input.prompt ?? ""), model: String(input.model ?? ""), aspectRatio: input.aspectRatio ? String(input.aspectRatio) : undefined, useContext: !!input.useContext, references: references.map((r) => ({ tenantId, publicId: r.publicId, mime: r.mime })) };
   const res =
     input.kind === "video"
       ? await generateVideo({ ...common, duration: Number(input.duration) || undefined, resolution: input.resolution ? String(input.resolution) : undefined })
@@ -69,7 +78,7 @@ export async function generateThumbnail(videoId: string, prompt: string): Promis
   if (!UUID.test(videoId)) return { ok: false, error: "Invalid file" };
   const [video] = await db.select({ id: mediaFiles.id }).from(mediaFiles).where(and(eq(mediaFiles.id, videoId), eq(mediaFiles.tenantId, tenantId), eq(mediaFiles.kind, "video")));
   if (!video) return { ok: false, error: "Video not found" };
-  const model = (await listGenerationModels("image"))[0];
+  const model = (await listGenerationModels("image")).find((m) => !requiresReference(m));
   if (!model) return { ok: false, error: "No image model is available right now" };
   const res = await generateImage({
     tenantId,

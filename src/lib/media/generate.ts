@@ -9,13 +9,14 @@ import { mediaFiles } from "@/db/schema";
 import { addCredits, chargeCredits, CREDIT_COSTS, OUT_OF_CREDITS } from "@/lib/credits";
 import { checkGenerationRequest, VISUAL_STYLE_GUARD } from "@/lib/guardrails";
 import { getTenant } from "@/lib/tenant-data";
-import { deleteFile, isMediaMime, MAX_VIDEO_BYTES, newPublicId, saveBuffer, saveStream, sniffMime, type MediaMime } from "./storage";
+import { MODEL_NEEDS_REFERENCE, REFERENCE_INSTRUCTION, referenceSupport, requiresReference } from "./references";
+import { deleteFile, isMediaMime, MAX_VIDEO_BYTES, newPublicId, readBuffer, saveBuffer, saveStream, sniffMime, type MediaMime } from "./storage";
 
 const API = "https://openrouter.ai/api/v1";
 const headers = () => ({ Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" });
 
 export type MediaKind = "image" | "video";
-export type GenModel = { id: string; name: string; kind: MediaKind; aspectRatios: string[]; durations?: number[]; resolutions?: string[]; price?: string };
+export type GenModel = { id: string; name: string; kind: MediaKind; aspectRatios: string[]; durations?: number[]; resolutions?: string[]; price?: string; frameImages?: string[]; maxImageRefs?: number; minImageRefs?: number };
 export type GenResult = { ok: true; id: string } | { ok: false; error: string };
 
 const IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "4:5"];
@@ -52,7 +53,8 @@ export async function listGenerationModels(kind?: MediaKind): Promise<GenModel[]
       const models: GenModel[] = [
         ...img.map((m) => {
           const ar = (m.supported_parameters as { aspect_ratio?: { values?: string[] } } | undefined)?.aspect_ratio?.values?.filter((x) => x !== "auto");
-          return { id: String(m.id), name: String(m.name || m.id), kind: "image" as const, aspectRatios: ar?.length ? ar : IMAGE_RATIOS };
+          const ir = (m.supported_parameters as { input_references?: { min?: number; max?: number } } | undefined)?.input_references;
+          return { id: String(m.id), name: String(m.name || m.id), kind: "image" as const, aspectRatios: ar?.length ? ar : IMAGE_RATIOS, maxImageRefs: typeof ir?.max === "number" ? ir.max : 0, minImageRefs: typeof ir?.min === "number" ? ir.min : 0 };
         }),
         ...vid
           .filter((m) => Array.isArray(m.supported_durations) && (m.supported_durations as number[]).length) // excludes edit/upscale-only models
@@ -64,6 +66,7 @@ export async function listGenerationModels(kind?: MediaKind): Promise<GenModel[]
             durations: [...(m.supported_durations as number[])].sort((a, b) => a - b),
             resolutions: (m.supported_resolutions as string[] | null) ?? [],
             price: videoPrice(m.pricing_skus as Record<string, string>),
+            frameImages: Array.isArray(m.supported_frame_images) ? (m.supported_frame_images as string[]) : undefined,
           })),
       ];
       if (!models.length) throw new Error("empty model list");
@@ -102,14 +105,25 @@ async function resolveModel(kind: MediaKind, model: string) {
 }
 
 /** Final provider prompt: user prompt + optional brand context + the always-on professional/brand-safe style guard. */
-async function withContext(tenantId: string, prompt: string, useContext?: boolean) {
+async function withContext(tenantId: string, prompt: string, useContext?: boolean, hasReference?: boolean) {
   let out = prompt;
+  if (hasReference) out += `
+
+${REFERENCE_INSTRUCTION}`; // server-side only, so the prompt shown in the UI stays clean
   if (useContext) {
     const t = await getTenant(tenantId);
     const about = [t?.name && `Brand: ${t.name}.`, t?.industry && `Industry: ${t.industry}.`, t?.companySummary?.slice(0, 600)].filter(Boolean).join(" ");
     if (about) out += `\n\nBrand context (match this brand's style and audience; do not render this text): ${about}`;
   }
   return `${out}\n\n${VISUAL_STYLE_GUARD}`;
+}
+
+/** A stored library image attached as a generation reference. */
+export type ReferenceFile = { tenantId: string; publicId: string; mime: string };
+
+/** data: URL for each reference (works even when the app URL is not publicly reachable by the provider). */
+async function referenceUrls(refs: ReferenceFile[]) {
+  return Promise.all(refs.map(async (r) => `data:${r.mime};base64,${(await readBuffer(r.tenantId, r.publicId, r.mime)).toString("base64")}`));
 }
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
@@ -124,22 +138,28 @@ async function providerError(r: Response) {
   }
 }
 
-export async function generateImage(input: { tenantId: string; prompt: string; model: string; aspectRatio?: string; useContext?: boolean }): Promise<GenResult> {
+export async function generateImage(input: { tenantId: string; prompt: string; model: string; aspectRatio?: string; useContext?: boolean; references?: ReferenceFile[] }): Promise<GenResult> {
   const { tenantId } = input;
   const prompt = input.prompt.trim().slice(0, 4000);
   if (!prompt) return { ok: false, error: "Enter a prompt" };
   const m = await resolveModel("image", input.model);
   if (!m) return { ok: false, error: "Unknown image model" };
+  const refs = input.references ?? [];
+  if (requiresReference(m) && !refs.length) return { ok: false, error: MODEL_NEEDS_REFERENCE };
+  if (refs.length && !referenceSupport(m).images) return { ok: false, error: "This model doesn't support reference images." };
+  if (m.maxImageRefs && refs.length > m.maxImageRefs) return { ok: false, error: `This model accepts at most ${m.maxImageRefs} reference image${m.maxImageRefs === 1 ? "" : "s"}.` };
   const aspectRatio = input.aspectRatio && m.aspectRatios.includes(input.aspectRatio) ? input.aspectRatio : undefined;
   const safe = await checkGenerationRequest(prompt, "image");
   if (!safe.ok) return { ok: false, error: safe.reason };
   if (!(await chargeCredits(tenantId, "image_generation", { note: m.id }))) return { ok: false, error: OUT_OF_CREDITS };
   try {
+    // Reference images: "input_references" (array of http(s)/data URLs) on POST /images, per openrouter.ai/docs/api/api-reference/images/generate-an-image.
+    const refUrls = refs.length ? await referenceUrls(refs) : [];
     const r = await fetch(`${API}/images`, {
       method: "POST",
       headers: headers(),
       signal: AbortSignal.timeout(300_000),
-      body: JSON.stringify({ model: m.id, prompt: await withContext(tenantId, prompt, input.useContext), n: 1, ...(aspectRatio && { aspect_ratio: aspectRatio }) }),
+      body: JSON.stringify({ model: m.id, prompt: await withContext(tenantId, prompt, input.useContext, !!refs.length), n: 1, ...(aspectRatio && { aspect_ratio: aspectRatio }), ...(refUrls.length && { input_references: refUrls }) }),
     });
     if (!r.ok) throw new Error(await providerError(r));
     const img = ((await r.json()).data ?? [])[0] as { b64_json?: string; media_type?: string } | undefined;
@@ -168,13 +188,19 @@ export async function generateVideo(input: {
   duration?: number;
   resolution?: string;
   useContext?: boolean;
+  references?: ReferenceFile[];
 }): Promise<GenResult> {
   const { tenantId } = input;
   const prompt = input.prompt.trim().slice(0, 4000);
   if (!prompt) return { ok: false, error: "Enter a prompt" };
   const m = await resolveModel("video", input.model);
   if (!m) return { ok: false, error: "Unknown video model" };
-  const body: Record<string, unknown> = { model: m.id, prompt: await withContext(tenantId, prompt, input.useContext) };
+  const refs = input.references ?? [];
+  if (requiresReference(m) && !refs.length) return { ok: false, error: MODEL_NEEDS_REFERENCE };
+  if (refs.length && !referenceSupport(m).images) return { ok: false, error: "This model doesn't support reference images." };
+  const frames = (["first_frame", "last_frame"] as const).filter((f) => (m.frameImages ?? ["first_frame"]).includes(f));
+  if (refs.length > frames.length) return { ok: false, error: `This model accepts at most ${frames.length} reference image${frames.length === 1 ? "" : "s"} (used as ${frames.join(" / ").replace(/_/g, " ")}).` };
+  const body: Record<string, unknown> = { model: m.id, prompt: await withContext(tenantId, prompt, input.useContext, !!refs.length) };
   if (input.aspectRatio && m.aspectRatios.includes(input.aspectRatio)) body.aspect_ratio = input.aspectRatio;
   if (input.duration && m.durations?.includes(input.duration)) body.duration = input.duration;
   if (input.resolution && m.resolutions?.includes(input.resolution)) body.resolution = input.resolution;
@@ -182,6 +208,12 @@ export async function generateVideo(input: {
   if (!safe.ok) return { ok: false, error: safe.reason };
   if (!(await chargeCredits(tenantId, "video_generation", { note: m.id }))) return { ok: false, error: OUT_OF_CREDITS };
   try {
+    if (refs.length) {
+      // Per openrouter.ai/docs/features/multimodal/video-generation: frame_images entries carry frame_type first_frame|last_frame.
+      // (input_references is style guidance only and is ignored when frame_images is present, so we use frame_images alone.)
+      const urls = await referenceUrls(refs);
+      body.frame_images = urls.map((url, i) => ({ type: "image_url", image_url: { url }, frame_type: frames[i] }));
+    }
     const r = await fetch(`${API}/videos`, { method: "POST", headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
     if (!r.ok) throw new Error(await providerError(r));
     const job = (await r.json()) as { id?: string; status?: string };
