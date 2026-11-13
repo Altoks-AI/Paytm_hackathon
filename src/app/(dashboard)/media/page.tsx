@@ -6,16 +6,16 @@ import { mediaFiles } from "@/db/schema";
 import { CREDIT_COSTS } from "@/lib/credits";
 import { appUrl, requireTenant } from "@/lib/tenant";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { CopyUrl, DeleteMedia, GeneratePanel, LocalDate, PendingPoller, Uploader } from "./media-ui";
+import { CopyUrl, DeleteMedia, LocalDate, PendingPoller } from "./media-ui";
 import { ThumbnailButton } from "./thumbnail";
 import { getThumbnailUrls } from "./actions";
 
-type SP = Promise<{ kind?: string; generate?: string }>;
+type SP = Promise<{ kind?: string }>;
 
 export default function MediaPage({ searchParams }: { searchParams: SP }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Media library" description="Generate images and videos with AI, or upload your own. Use them in social posts." />
+      <PageHeader title="Media library" description="Everything you have generated or uploaded. Create new media from the Social page when composing a post." />
       <Suspense fallback={<div className="text-sm text-zinc-500">Loading…</div>}>
         <MediaContent searchParams={searchParams} />
       </Suspense>
@@ -26,7 +26,7 @@ export default function MediaPage({ searchParams }: { searchParams: SP }) {
 const fmtSize = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 async function MediaContent({ searchParams }: { searchParams: SP }) {
-  const { tenantId, tenant } = await requireTenant();
+  const { tenantId } = await requireTenant();
   const sp = await searchParams;
   const kind = sp.kind === "image" || sp.kind === "video" ? sp.kind : null;
   const rows = await db
@@ -40,16 +40,6 @@ async function MediaContent({ searchParams }: { searchParams: SP }) {
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <GeneratePanel
-          initialKind={sp.generate === "video" ? "video" : "image"}
-          costs={{ image: CREDIT_COSTS.image_generation.cost, video: CREDIT_COSTS.video_generation.cost }}
-          credits={tenant.credits}
-          hasContext={!!tenant.companySummary}
-        />
-        <Uploader />
-      </div>
-
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-zinc-900">Library</h2>
@@ -71,7 +61,7 @@ async function MediaContent({ searchParams }: { searchParams: SP }) {
         </div>
         <PendingPoller active={rows.some((r) => r.status === "pending")} />
         {rows.length === 0 ? (
-          <Empty>No media yet. Generate or upload something above.</Empty>
+          <Empty>No media yet. Generate or upload media while composing a post on the Social page.</Empty>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((r) => {

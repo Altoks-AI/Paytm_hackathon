@@ -27,7 +27,7 @@ export default function SocialPage({ searchParams }: { searchParams: Promise<{ e
 }
 
 async function SocialContent({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, tenant } = await requireTenant();
   ensureScheduler();
   const { edit } = await searchParams;
 
@@ -49,6 +49,9 @@ async function SocialContent({ searchParams }: { searchParams: Promise<{ edit?: 
         key={editing?.id ?? "new"}
         connected={connected}
         imageCost={CREDIT_COSTS.image_generation.cost}
+        videoCost={CREDIT_COSTS.video_generation.cost}
+        credits={tenant.credits}
+        hasContext={!!tenant.companySummary}
         initial={
           editing
             ? {

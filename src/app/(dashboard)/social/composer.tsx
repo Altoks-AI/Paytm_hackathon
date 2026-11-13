@@ -4,6 +4,8 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
+import { MediaGeneratorPanel } from "../media/media-generator-panel";
+import { pollMedia } from "../media/actions";
 import { PLATFORM_LABEL, PLATFORM_MAX, PLATFORM_MEDIA, PLATFORMS, type MediaType, type Platform } from "@/lib/social/platforms";
 import { generatePostText, savePost } from "./actions";
 import { LibraryPicker } from "./library-picker";
@@ -15,7 +17,7 @@ const toLocalInput = (iso: string) => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };
 
-export function Composer({ connected, initial, imageCost }: { connected: Record<Platform, boolean>; initial: Initial; imageCost: number }) {
+export function Composer({ connected, initial, imageCost, videoCost, credits, hasContext }: { connected: Record<Platform, boolean>; initial: Initial; imageCost: number; videoCost: number; credits: number; hasContext: boolean }) {
   const [state, formAction, saving] = useActionState(savePost, undefined);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnailUrl ?? "");
@@ -28,6 +30,41 @@ export function Composer({ connected, initial, imageCost }: { connected: Record<
   const [topic, setTopic] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [writing, startWriting] = useTransition();
+
+  // A video being generated for the main media slot. Owned here (not by the picker panel) so polling survives the panel collapsing.
+  const [videoJob, setVideoJob] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!videoJob) return;
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      const r = await pollMedia(videoJob).catch(() => null);
+      if (stop) return;
+      if (r?.status === "ready") {
+        setMediaUrl(r.item.url);
+        if (r.item.thumbUrl) setThumbnailUrl(r.item.thumbUrl);
+        setVideoJob(null);
+      } else if (r?.status === "failed") {
+        setVideoError(`Video generation failed: ${r.error}. Credits were refunded.`);
+        setVideoJob(null);
+      } else timer = setTimeout(tick, 6000);
+    };
+    timer = setTimeout(tick, 3000);
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [videoJob]);
+
+  const changeType = (t: MediaType) => {
+    setMediaType(t);
+    setVideoJob(null);
+    setVideoError(null);
+  };
+
+  const costs = { image: imageCost, video: videoCost };
 
   const reason = (p: Platform) =>
     !connected[p] ? "connect in Integrations" : !PLATFORM_MEDIA[p].includes(mediaType) ? (p === "youtube" ? "needs a video" : "needs image or video") : null;
@@ -105,7 +142,7 @@ export function Composer({ connected, initial, imageCost }: { connected: Record<
 
         <div className="sm:max-w-[200px]">
           <Label>Post type</Label>
-          <Select name="mediaType" value={mediaType} onChange={(e) => setMediaType(e.target.value as MediaType)}>
+          <Select name="mediaType" value={mediaType} onChange={(e) => changeType(e.target.value as MediaType)}>
             <option value="text">Text only</option>
             <option value="image">Image</option>
             <option value="video">Video</option>
@@ -117,13 +154,35 @@ export function Composer({ connected, initial, imageCost }: { connected: Record<
             <LibraryPicker
               key={mediaType}
               kind={mediaType}
-              imageCost={imageCost}
               label={mediaType === "image" ? "Add your image" : "Add your video"}
               onPick={(p) => {
+                setVideoJob(null);
+                setVideoError(null);
                 setMediaUrl(p.url);
                 if (p.kind === "video") setThumbnailUrl(p.thumbUrl ?? "");
               }}
+              renderGenerate={(close) => (
+                <MediaGeneratorPanel
+                  mode={mediaType}
+                  costs={costs}
+                  credits={credits}
+                  hasContext={hasContext}
+                  onClose={close}
+                  onGenerated={(item) => setMediaUrl(item.url)}
+                  onVideoStarted={(id) => {
+                    setVideoError(null);
+                    setVideoJob(id);
+                  }}
+                />
+              )}
             />
+            {videoJob && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-800" />
+                Generating your video (usually 1–5 min). You can keep editing; it will attach here when ready.
+              </div>
+            )}
+            {videoError && <p className="text-sm text-red-600">{videoError}</p>}
             {/^https?:\/\//.test(mediaUrl) && (
               <div className="overflow-hidden rounded-md border border-zinc-200 bg-zinc-50">
                 {mediaType === "image" ? (
@@ -155,7 +214,11 @@ export function Composer({ connected, initial, imageCost }: { connected: Record<
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={thumbnailUrl} alt="Thumbnail" className="h-24 rounded-md border border-zinc-200 object-cover" />
                 )}
-                <LibraryPicker kind="image" imageCost={imageCost} onPick={(p) => setThumbnailUrl(p.url)} />
+                <LibraryPicker
+                  kind="image"
+                  onPick={(p) => setThumbnailUrl(p.url)}
+                  renderGenerate={(close) => <MediaGeneratorPanel mode="image" costs={costs} credits={credits} hasContext={hasContext} onClose={close} onGenerated={(item) => setThumbnailUrl(item.url)} />}
+                />
               </div>
             )}
           </div>

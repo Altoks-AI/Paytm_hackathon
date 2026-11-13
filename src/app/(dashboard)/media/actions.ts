@@ -128,3 +128,18 @@ export async function getThumbnailUrls(rows: { id: string; thumbnailId: string |
   const { tenantId } = await requireTenant();
   return Object.fromEntries(await thumbnailUrls(tenantId, rows));
 }
+
+export type MediaState = { status: "pending" } | { status: "failed"; error: string } | { status: "ready"; item: LibraryItem };
+
+/** Advances pending videos at the provider (failures are refunded there), then reports one file's state. */
+export async function pollMedia(id: string): Promise<MediaState> {
+  const { tenantId } = await requireTenant();
+  if (!UUID.test(id)) return { status: "failed", error: "Invalid file" };
+  await refreshPendingMedia(tenantId).catch(() => 0);
+  const [row] = await db.select().from(mediaFiles).where(and(eq(mediaFiles.id, id), eq(mediaFiles.tenantId, tenantId)));
+  if (!row) return { status: "failed", error: "The video was removed from your library" };
+  if (row.status === "pending") return { status: "pending" };
+  if (row.status !== "ready") return { status: "failed", error: row.error || "Generation failed" };
+  const thumbs = await thumbnailUrls(tenantId, [row]);
+  return { status: "ready", item: { id: row.id, kind: row.kind, url: `${appUrl()}/api/media/${row.publicId}`, thumbUrl: thumbs.get(row.id) ?? null, prompt: row.prompt, createdAt: row.createdAt.toISOString() } };
+}

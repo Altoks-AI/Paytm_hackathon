@@ -1,24 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
+import { useState, useTransition, type ReactNode } from "react";
 import { FolderOpen, Sparkles, Upload } from "lucide-react";
-import { Button, Textarea } from "@/components/ui";
-import { generateMedia, getModels, listLibrary, type LibraryItem } from "../media/actions";
+import { listLibrary, type LibraryItem } from "../media/actions";
 
 type Kind = "image" | "video";
 type Picked = { url: string; kind: Kind; thumbUrl: string | null };
 
 /**
- * Media source for the composer. Three equal options: upload a file, generate with AI from a description,
+ * Media source for the composer. Three equal options: upload a file, generate with AI (panel supplied by the composer),
  * or choose something already in the library. Every path ends with a library file, returned through onPick.
  */
-export function LibraryPicker({ kind, onPick, imageCost, label }: { kind: Kind; onPick: (p: Picked) => void; imageCost: number; label?: string }) {
+export function LibraryPicker({ kind, onPick, label, renderGenerate }: { kind: Kind; onPick: (p: Picked) => void; label?: string; renderGenerate?: (close: () => void) => ReactNode }) {
   const [panel, setPanel] = useState<"library" | "generate" | null>(null);
   const [items, setItems] = useState<LibraryItem[] | null>(null);
-  const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"upload" | "generate" | null>(null);
+  const [busy, setBusy] = useState<"upload" | null>(null);
   const [loading, start] = useTransition();
 
   const pick = (i: LibraryItem) => {
@@ -45,25 +42,6 @@ export function LibraryPicker({ kind, onPick, imageCost, label }: { kind: Kind; 
       pick(found);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const generate = async () => {
-    setError(null);
-    setBusy("generate");
-    try {
-      const model = (await getModels("image"))[0];
-      if (!model) throw new Error("No image model is available right now");
-      const res = await generateMedia({ kind: "image", prompt, model: model.id, aspectRatio: model.aspectRatios.includes("16:9") ? "16:9" : undefined, useContext: true });
-      if (!res.ok) throw new Error(res.error);
-      const found = (await listLibrary()).find((i) => i.id === res.id);
-      if (!found) throw new Error("Generated, but the image could not be found in your library");
-      setPrompt("");
-      pick(found);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setBusy(null);
     }
@@ -96,27 +74,7 @@ export function LibraryPicker({ kind, onPick, imageCost, label }: { kind: Kind; 
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {panel === "generate" && (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
-          {kind === "video" ? (
-            <p className="text-sm leading-relaxed text-zinc-600">
-              Videos take a few minutes to render. <Link href="/media?generate=video" className="font-medium text-brand-600 underline">Generate one in the media library</Link>, then come back and choose it from your library.
-            </p>
-          ) : (
-            <>
-              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} maxLength={4000} placeholder="Describe the image, e.g. our team at the new office reception, bright and welcoming" className="bg-white" />
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <Link href="/media?generate=image" className="text-xs text-zinc-500 underline hover:text-zinc-800">
-                  More options (model, aspect ratio)
-                </Link>
-                <Button type="button" onClick={generate} disabled={!!busy || !prompt.trim()}>
-                  {busy === "generate" ? "Generating…" : `Generate, ${imageCost} credits`}
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {panel === "generate" && renderGenerate?.(() => setPanel(null))}
 
       {panel === "library" && (
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
