@@ -153,13 +153,13 @@ export async function generateImage(input: { tenantId: string; prompt: string; m
   if (!safe.ok) return { ok: false, error: safe.reason };
   if (!(await chargeCredits(tenantId, "image_generation", { note: m.id }))) return { ok: false, error: OUT_OF_CREDITS };
   try {
-    // Reference images: "input_references" (array of http(s)/data URLs) on POST /images, per openrouter.ai/docs/api/api-reference/images/generate-an-image.
+    // Reference images: "input_references" (array of { type: "image_url", image_url: { url } } objects; url = http(s) or data URL) on POST /images, per openrouter.ai/docs/api/api-reference/images/generate-an-image.
     const refUrls = refs.length ? await referenceUrls(refs) : [];
     const r = await fetch(`${API}/images`, {
       method: "POST",
       headers: headers(),
       signal: AbortSignal.timeout(300_000),
-      body: JSON.stringify({ model: m.id, prompt: await withContext(tenantId, prompt, input.useContext, !!refs.length), n: 1, ...(aspectRatio && { aspect_ratio: aspectRatio }), ...(refUrls.length && { input_references: refUrls }) }),
+      body: JSON.stringify({ model: m.id, prompt: await withContext(tenantId, prompt, input.useContext, !!refs.length), n: 1, ...(aspectRatio && { aspect_ratio: aspectRatio }), ...(refUrls.length && { input_references: refUrls.map((url) => ({ type: "image_url", image_url: { url } })) }) }),
     });
     if (!r.ok) throw new Error(await providerError(r));
     const img = ((await r.json()).data ?? [])[0] as { b64_json?: string; media_type?: string } | undefined;
