@@ -86,7 +86,7 @@ export const agents = pgTable("agents", {
   tenantId: tenantId(),
   agentName: text("agent_name").notNull().default("Assistant"),
   basePrompt: text("base_prompt").notNull().default(""), // custom instructions, shared by all channels
-  model: text("model").notNull().default("openai/gpt-4o-mini"), // OpenRouter model id
+  model: text("model").notNull().default("sarvam/sarvam-105b-conversations"), // "sarvam/<id>" or an OpenRouter model id
   temperature: real("temperature").notNull().default(0.4),
   language: text("language").notNull().default("te-IN"), // default language
   extraLanguages: jsonb("extra_languages").$type<string[]>().notNull().default(["hi-IN", "en-IN"]), // optional languages the agent may switch to

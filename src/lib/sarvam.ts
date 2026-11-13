@@ -36,7 +36,7 @@ export async function transcribe(audio: Buffer | ArrayBuffer, mime = "audio/wav"
   const form = new FormData();
   const bytes = audio instanceof ArrayBuffer ? new Uint8Array(audio) : new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength);
   form.append("file", new Blob([bytes as BlobPart], { type: mime }), `audio.${/mp3|mpeg/.test(mime) ? "mp3" : (mime.match(/ogg|opus|aac|flac|webm|amr|m4a|mp4/)?.[0] ?? "wav")}`);
-  form.append("model", "saaras:v3");
+  form.append("model", "saaras:v4");
   form.append("mode", "transcribe");
   form.append("language_code", languageCode && LANGS.includes(languageCode) ? languageCode : "unknown");
   const res = await fetch(`${BASE}/speech-to-text`, { method: "POST", headers: { "api-subscription-key": apiKey() }, body: form });

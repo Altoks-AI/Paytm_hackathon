@@ -11,8 +11,19 @@ const perMillion = (v?: string) => {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 1e6 * 100) / 100 : null;
 };
 
+/** Sarvam models, always listed first (served directly by Sarvam, not OpenRouter). */
+const SARVAM: ModelOption[] = [
+  { id: "sarvam/sarvam-105b-conversations", name: "Sarvam 105B Conversational (default)", context: 32_000, prompt: null, completion: null },
+  { id: "sarvam/sarvam-105b", name: "Sarvam 105B", context: 128_000, prompt: null, completion: null },
+];
+
+/** Sarvam models + tool-capable OpenRouter models. */
+export async function getToolModels(): Promise<ModelOption[]> {
+  return [...SARVAM, ...((await getOpenRouterModels()) ?? [])];
+}
+
 /** Tool-capable OpenRouter models, or null if the catalogue can't be fetched. */
-export async function getToolModels(): Promise<ModelOption[] | null> {
+async function getOpenRouterModels(): Promise<ModelOption[] | null> {
   if (cache && Date.now() - cache.at < TTL) return cache.models;
   try {
     const res = await fetch("https://openrouter.ai/api/v1/models", { cache: "no-store", signal: AbortSignal.timeout(8000) });

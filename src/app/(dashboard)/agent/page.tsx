@@ -175,7 +175,7 @@ function LanguagesVoice({ s }: { s: Settings }) {
 async function ModelTab({ s }: { s: Settings }) {
   const models = await getToolModels();
   return (
-    <Section title="Model" description="The LLM that powers the agent (via OpenRouter). Only models that support tool calling are listed.">
+    <Section title="Model" description="The LLM that powers the agent (Sarvam or any OpenRouter model). Only models that support tool calling are listed.">
       <ActionForm action={saveModel}>
         <ModelPicker models={models} value={s.model} temperature={s.temperature} />
       </ActionForm>

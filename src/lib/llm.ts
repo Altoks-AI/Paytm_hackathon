@@ -1,4 +1,4 @@
-// OpenRouter (OpenAI-compatible). Env: OPENROUTER_API_KEY, optional OPENROUTER_MODEL.
+// LLM providers (both OpenAI-compatible). Model ids "sarvam/<id>" go to Sarvam (SARVAM_API_KEY); everything else to OpenRouter (OPENROUTER_API_KEY).
 export type ChatMessage =
   | { role: "system" | "user"; content: string }
   | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
@@ -7,24 +7,48 @@ export type ChatMessage =
 export type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
 export type ToolDef = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
 
-export const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+export const SARVAM_MODEL = "sarvam/sarvam-105b-conversations";
+export const DEFAULT_MODEL = process.env.LLM_DEFAULT_MODEL || SARVAM_MODEL;
+
+/** Endpoint, headers and provider-specific body for a model id. */
+function provider(model: string): { name: string; url: string; headers: Record<string, string>; model: string; extra: Record<string, unknown> } {
+  if (model.startsWith("sarvam/")) {
+    return {
+      name: "Sarvam",
+      url: "https://api.sarvam.ai/v1/chat/completions",
+      headers: { "api-subscription-key": process.env.SARVAM_API_KEY || "", "Content-Type": "application/json" },
+      model: model.slice("sarvam/".length),
+      // Reasoning is on by default and eats max_tokens / adds latency; agents need fast replies.
+      extra: { reasoning_effort: null } as Record<string, unknown>,
+    };
+  }
+  return {
+    name: "OpenRouter",
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+    model,
+    extra: {} as Record<string, unknown>,
+  };
+}
 
 export async function chat(opts: { messages: ChatMessage[]; tools?: ToolDef[]; model?: string; maxTokens?: number; temperature?: number }) {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const p = provider(opts.model || DEFAULT_MODEL);
+  const res = await fetch(p.url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+    headers: p.headers,
     body: JSON.stringify({
-      model: opts.model || DEFAULT_MODEL,
+      ...p.extra,
+      model: p.model,
       messages: opts.messages,
       tools: opts.tools?.length ? opts.tools : undefined,
       max_tokens: opts.maxTokens ?? 600,
       temperature: opts.temperature ?? 0.4,
     }),
   });
-  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw new Error(`${p.name} ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   const msg = data.choices?.[0]?.message;
-  if (!msg) throw new Error("OpenRouter returned no message");
+  if (!msg) throw new Error(`${p.name} returned no message`);
   return msg as AssistantMessage;
 }
 
@@ -41,12 +65,14 @@ export type AssistantMessage = { role: "assistant"; content: string | null; tool
  * complete assistant message (content + accumulated tool calls). Abort with `signal`.
  */
 export async function* chatStream(opts: { messages: ChatMessage[]; tools?: ToolDef[]; model?: string; maxTokens?: number; temperature?: number; signal?: AbortSignal }): AsyncGenerator<string, AssistantMessage> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const p = provider(opts.model || DEFAULT_MODEL);
+  const res = await fetch(p.url, {
     method: "POST",
     signal: opts.signal,
-    headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+    headers: p.headers,
     body: JSON.stringify({
-      model: opts.model || DEFAULT_MODEL,
+      ...p.extra,
+      model: p.model,
       messages: opts.messages,
       tools: opts.tools?.length ? opts.tools : undefined,
       max_tokens: opts.maxTokens ?? 600,
@@ -54,7 +80,7 @@ export async function* chatStream(opts: { messages: ChatMessage[]; tools?: ToolD
       stream: true,
     }),
   });
-  if (!res.ok || !res.body) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok || !res.body) throw new Error(`${p.name} ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
   let content = "";
   const calls: ToolCall[] = [];
@@ -82,7 +108,7 @@ export async function* chatStream(opts: { messages: ChatMessage[]; tools?: ToolD
         } catch {
           continue;
         }
-        if (chunk.error) throw new Error(`OpenRouter stream error: ${chunk.error.message ?? "unknown"}`);
+        if (chunk.error) throw new Error(`${p.name} stream error: ${chunk.error.message ?? "unknown"}`);
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
         for (const tc of delta.tool_calls ?? []) {

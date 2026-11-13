@@ -286,11 +286,11 @@ export function ModelPicker({ models, value, temperature }: { models: ModelOptio
       <input type="hidden" name="model" value={model} />
       {models ? (
         <div>
-          <Label hint={`${models.length} tool-capable models from OpenRouter`}>LLM</Label>
+          <Label hint={`Sarvam + ${models.length - 2} tool-capable OpenRouter models`}>LLM</Label>
           <div className="mb-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
             Selected: <span className="font-medium text-zinc-900">{current?.name ?? model}</span> <code className="ml-1 text-xs text-zinc-500">{model}</code>
           </div>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search models, e.g. gpt, claude, gemini, llama…" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search models, e.g. sarvam, gpt, claude, gemini…" />
           <div className="mt-2 max-h-72 divide-y divide-zinc-100 overflow-y-auto rounded-lg border border-zinc-200">
             {list.length === 0 && <div className="p-3 text-sm text-zinc-500">No models match.</div>}
             {list.map((m) => (

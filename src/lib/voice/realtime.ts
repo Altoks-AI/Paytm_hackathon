@@ -11,7 +11,7 @@ import { fillVariables } from "@/lib/agent/variables";
 import { verifyStreamToken } from "./stream-token";
 
 const SARVAM_WS = "wss://api.sarvam.ai";
-const STT_MODEL = process.env.SARVAM_STT_STREAM_MODEL || "saaras:v3";
+const STT_MODEL = process.env.SARVAM_STT_STREAM_MODEL || "saaras:v4";
 const TTS_CODEC = process.env.SARVAM_TTS_STREAM_CODEC || "mulaw";
 const STT_RATE = 16000;
 const SILENCE_MS = 20_000;
