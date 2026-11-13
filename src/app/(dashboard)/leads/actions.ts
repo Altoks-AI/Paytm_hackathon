@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { leads } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
-import { LEAD_STATUSES, csvToLeads, isUuid, normalizePhone } from "@/lib/leads";
+import { LEAD_STATUSES, csvToLeads, isUuid, normalizePhone, rowsToLeads, type ImportedLead } from "@/lib/leads";
+import { xlsxToRows } from "@/lib/leads-excel";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -59,19 +60,32 @@ export async function deleteLead(id: string) {
 export async function importLeads(_: FormState, fd: FormData): Promise<FormState> {
   const { tenantId } = await requireTenant();
   const file = fd.get("file");
-  let text = String(fd.get("csv") || "");
+  let rows: ImportedLead[];
   if (file instanceof File && file.size > 0) {
-    if (file.size > 1_000_000) return { error: "File too large (max 1 MB) — split it into smaller files" };
-    text = await file.text();
+    if (file.size > 5_000_000) return { error: "File too large (max 5 MB) — split it into smaller files" };
+    if (/\.xlsx$/i.test(file.name) || file.type.includes("spreadsheetml")) {
+      try {
+        rows = rowsToLeads(await xlsxToRows(await file.arrayBuffer()));
+      } catch {
+        return { error: "Could not read that Excel file. Save it as .xlsx (or .csv) and try again." };
+      }
+    } else if (/\.xls$/i.test(file.name)) {
+      return { error: "Old .xls files aren't supported. In Excel use Save As → .xlsx or .csv." };
+    } else {
+      rows = csvToLeads(await file.text());
+    }
+  } else {
+    const text = String(fd.get("csv") || "");
+    if (!text.trim()) return { error: "Paste CSV text or choose a file" };
+    rows = csvToLeads(text);
   }
-  if (!text.trim()) return { error: "Paste CSV text or choose a file" };
-  const rows = csvToLeads(text);
-  const byPhone = new Map<string, { tenantId: string; name: string | null; phone: string; email: string | null; source: string }>();
+  if (!rows.length) return { error: "No rows found in the file" };
+  const byPhone = new Map<string, { tenantId: string; name: string | null; phone: string; email: string | null; notes: string | null; tags: string[]; source: string }>();
   let invalid = 0;
   for (const r of rows) {
     const phone = normalizePhone(r.phone);
     if (!phone) { invalid++; continue; }
-    byPhone.set(phone, { tenantId, phone, name: r.name || null, email: r.email.toLowerCase() || null, source: "import" });
+    byPhone.set(phone, { tenantId, phone, name: r.name || null, email: r.email.toLowerCase() || null, notes: r.notes || null, tags: r.tags, source: "import" });
   }
   const values = [...byPhone.values()];
   for (let i = 0; i < values.length; i += 500) {
@@ -80,7 +94,12 @@ export async function importLeads(_: FormState, fd: FormData): Promise<FormState
       .values(values.slice(i, i + 500))
       .onConflictDoUpdate({
         target: [leads.tenantId, leads.phone],
-        set: { name: sql`coalesce(excluded.name, ${leads.name})`, email: sql`coalesce(excluded.email, ${leads.email})` },
+        set: {
+          name: sql`coalesce(excluded.name, ${leads.name})`,
+          email: sql`coalesce(excluded.email, ${leads.email})`,
+          notes: sql`coalesce(excluded.notes, ${leads.notes})`,
+          tags: sql`case when jsonb_array_length(excluded.tags) > 0 then excluded.tags else ${leads.tags} end`,
+        },
       });
   }
   revalidatePath("/leads");

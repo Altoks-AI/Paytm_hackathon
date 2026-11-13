@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { campaigns, campaignRecipients, leads } from "@/db/schema";
 import { requireTenant } from "@/lib/tenant";
 import { getAgent } from "@/lib/agents";
+import { AUTO_VARIABLES, extractVariables, variableLabel } from "@/lib/agent/variables";
 import { assertVoiceReady, isCampaignRunning, runCallCampaign, startOutboundCall } from "@/lib/voice/outbound";
 
 export type FormState = { error?: string; ok?: string } | null;
@@ -18,9 +19,17 @@ export async function callNow(_: FormState, fd: FormData): Promise<FormState> {
   const to = String(fd.get("to") || "").trim();
   const objective = String(fd.get("objective") || "").trim() || "Introduce our company and ask how we can help.";
   if (!to) return { error: "Enter a phone number." };
+  const agent = await getAgent(tenantId, String(fd.get("agentId") || "") || null);
+  if (!agent) return { error: "Pick an agent." };
+  const variables: Record<string, string> = {};
+  for (const name of extractVariables(agent.basePrompt, agent.greeting)) {
+    const v = String(fd.get(`var_${name}`) || "").trim().slice(0, 500);
+    if (!v && !AUTO_VARIABLES.includes(name)) return { error: `Fill in "${variableLabel(name)}".` };
+    if (v) variables[name] = v;
+  }
   try {
     const [lead] = await db.select({ id: leads.id }).from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.phone, to.replace(/[^\d+]/g, ""))));
-    await startOutboundCall({ tenantId, agentId: String(fd.get("agentId") || "") || null, to, objective, leadId: lead?.id });
+    await startOutboundCall({ tenantId, agentId: agent.id, to, objective, leadId: lead?.id, variables });
   } catch (e) {
     return { error: msg(e) };
   }

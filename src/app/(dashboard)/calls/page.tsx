@@ -8,7 +8,9 @@ import { getIntegration } from "@/lib/integrations";
 import { Badge, Card, Empty, Input, Label, PageHeader, Table } from "@/components/ui";
 import { ActionForm } from "./action-form";
 import { callNow } from "./actions";
-import { AgentSelect, NewCampaignForm } from "./new-campaign-form";
+import { NewCampaignForm } from "./new-campaign-form";
+import { CallNowFields } from "./call-now-fields";
+import { extractVariables } from "@/lib/agent/variables";
 import { statusTone, fmtDuration } from "./ui-helpers";
 
 export default async function CallsPage() {
@@ -38,6 +40,11 @@ export default async function CallsPage() {
   ]);
   const voiceAgents = agentRows.filter((a) => a.voiceEnabled);
   const agentOpts = (voiceAgents.length ? voiceAgents : agentRows).map((a) => ({ id: a.id, label: `${a.agentName} · ${a.phoneNumber || twilio?.phoneNumber || "no number"}${a.voiceEnabled ? "" : " (voice off)"}` }));
+  const callAgentOpts = (voiceAgents.length ? voiceAgents : agentRows).map((a) => ({
+    id: a.id,
+    label: agentOpts.find((o) => o.id === a.id)?.label ?? a.agentName,
+    variables: extractVariables(a.basePrompt, a.greeting),
+  }));
   const agentName = new Map(agentRows.map((a) => [a.id, a.agentName]));
   const blocker = !twilio ? "Twilio is not connected — connect it in Integrations to make or receive calls." : !voiceAgents.length ? "No agent has voice enabled — turn it on in Agents → Channels and assign a phone number." : null;
 
@@ -55,7 +62,7 @@ export default async function CallsPage() {
         <Card>
           <h2 className="mb-4 font-semibold text-zinc-900">Call a single number now</h2>
           <ActionForm action={callNow} submit="Call now" className="space-y-4">
-            <AgentSelect agents={agentOpts} />
+            <CallNowFields agents={callAgentOpts} />
             <div>
               <Label hint="E.164">Phone number</Label>
               <Input name="to" required placeholder="+919876543210" />

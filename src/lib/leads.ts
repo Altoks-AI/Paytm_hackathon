@@ -45,19 +45,35 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** Parse CSV text into lead rows. Uses a header row (name/phone/email, any order) if present, else assumes name,phone,email. */
-export function csvToLeads(text: string): { name: string; phone: string; email: string }[] {
-  const rows = parseCsv(text);
+export type ImportedLead = { name: string; phone: string; email: string; notes: string; tags: string[] };
+
+/** Columns of the import template (CSV and Excel). */
+export const IMPORT_COLUMNS = ["name", "phone", "email", "notes", "tags"] as const;
+
+export function csvToLeads(text: string): ImportedLead[] {
+  return rowsToLeads(parseCsv(text));
+}
+
+/** Rows (first may be a header) → leads. Without a header, columns are name, phone, email, notes, tags. */
+export function rowsToLeads(rows: string[][]): ImportedLead[] {
+  rows = rows.filter((r) => r.some((c) => c.trim()));
   if (!rows.length) return [];
   const head = rows[0].map((h) => h.trim().toLowerCase());
-  let idx = { name: 0, phone: 1, email: 2 };
+  let idx = { name: 0, phone: 1, email: 2, notes: 3, tags: 4 };
   let body = rows;
   if (head.some((h) => h.includes("phone") || h === "name" || h.includes("email") || h.includes("mobile"))) {
     const find = (...keys: string[]) => head.findIndex((h) => keys.some((k) => h.includes(k)));
-    idx = { name: find("name"), phone: find("phone", "mobile", "number"), email: find("email", "mail") };
+    idx = { name: find("name"), phone: find("phone", "mobile", "number"), email: find("email", "mail"), notes: find("note", "comment", "remark"), tags: find("tag", "label") };
     body = rows.slice(1);
   }
   const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
-  return body.map((r) => ({ name: get(r, idx.name), phone: get(r, idx.phone), email: get(r, idx.email) }));
+  return body.map((r) => ({
+    name: get(r, idx.name),
+    phone: get(r, idx.phone),
+    email: get(r, idx.email),
+    notes: get(r, idx.notes),
+    tags: get(r, idx.tags).split(/[,;|]/).map((t) => t.trim()).filter(Boolean).slice(0, 20),
+  }));
 }
 
 export function toCsv(rows: (string | null | undefined)[][]): string {

@@ -155,6 +155,19 @@ function General({ s }: { s: Settings }) {
         <div>
           <Label hint="system prompt, shared by all channels">Custom instructions</Label>
           <Textarea name="basePrompt" defaultValue={s.basePrompt} rows={10} placeholder="Tone, what to offer, what never to say, business hours, booking rules…" />
+          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+            <p className="font-medium text-zinc-800">Variables</p>
+            <p className="mt-1">
+              Write <code className="rounded bg-white px-1">{"{{variable_name}}"}</code> anywhere in the instructions or greeting, e.g.{" "}
+              <code className="rounded bg-white px-1">{"Hi {{customer_name}}, I'm calling about your {{product}} order."}</code> Use letters, numbers and
+              underscores, no spaces.
+            </p>
+            <p className="mt-1">
+              <code className="rounded bg-white px-1">{"{{customer_name}}"}</code> and <code className="rounded bg-white px-1">{"{{customer_phone}}"}</code> are
+              filled automatically from the lead / caller. Any other variable you create is asked for when you place a call (Calls → Call now, or the Test call
+              tab) and filled in before the agent speaks.
+            </p>
+          </div>
         </div>
       </ActionForm>
     </Section>
