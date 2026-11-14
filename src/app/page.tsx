@@ -156,10 +156,10 @@ export default function Home() {
         <section className={`${wrap} grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12 lg:py-24`}>
           <div>
             <h1 className="text-[2.125rem] font-semibold leading-[1.1] tracking-[-0.035em] text-zinc-900 sm:text-[2.75rem] lg:text-[3.5rem] lg:leading-[1.06]">
-              Every customer gets an answer, on WhatsApp, on the phone and on your site.
+              One unified agent for customer engagement and marketing.
             </h1>
             <p className="mt-5 max-w-[34rem] text-base leading-relaxed text-zinc-600 sm:mt-6 sm:text-lg">
-              AgentDesk gives your company one AI agent that knows your business. It handles support, questions and bookings around the clock, and hands over to your team when a person is needed.
+              Build your agent once and assign it to every channel. It answers customers, books and takes orders, posts on social media and runs WhatsApp and voice campaigns, and hands over to your team when a person is needed.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link href="/signup" className="rounded-md bg-brand-600 px-5 py-3 text-center text-[0.9375rem] font-medium text-white transition-colors hover:bg-brand-700">
@@ -190,7 +190,7 @@ export default function Home() {
 
         <section id="features" className="scroll-mt-16 border-t border-zinc-200 bg-zinc-50">
           <div className={`${wrap} py-14 sm:py-20`}>
-            <SectionHead title="One agent, three ways to reach you" body="The same agent, with the same knowledge of your business, wherever your customers prefer to talk." />
+            <SectionHead title="One agent, every channel" body="Build it once and assign it wherever your customers talk. Nothing is rebuilt per channel." />
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {channels.map((c) => (
                 <div key={c.title} className="rounded-[10px] border border-zinc-200 bg-white p-6">
@@ -205,6 +205,9 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            <p className="mt-6 text-[0.9375rem] leading-relaxed text-zinc-600">
+              Also on Instagram, Facebook, X, LinkedIn, YouTube and email: DMs, comments and replies, handled by the same agent.
+            </p>
           </div>
         </section>
 
@@ -231,7 +234,7 @@ export default function Home() {
 
         <section className="border-t border-zinc-200 bg-zinc-50">
           <div className={`${wrap} py-14 sm:py-20`}>
-            <SectionHead title="Reach out, don't just wait" body="Send reminders and offers, call your leads, and keep your social pages active from the same place." />
+            <SectionHead title="Digital marketing built in" body="The same agent posts on social media and runs campaigns over WhatsApp and voice. Replies come straight back to it as conversations." />
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
               {outreach.map((o) => (
                 <div key={o.title} className="flex gap-4 rounded-[10px] border border-zinc-200 bg-white p-5 sm:p-6">
@@ -312,7 +315,7 @@ export default function Home() {
 
         <section className="bg-brand-700">
           <div className={`${wrap} flex flex-col items-start gap-6 py-14 sm:py-16 lg:flex-row lg:items-center lg:justify-between`}>
-            <h2 className="max-w-[36rem] text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-white sm:text-[2.25rem]">Stop missing messages and calls from your customers.</h2>
+            <h2 className="max-w-[36rem] text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-white sm:text-[2.25rem]">Build the agent once. Assign it to every channel.</h2>
             <Link href="/signup" className="w-full rounded-md bg-white px-6 py-3 text-center text-[0.9375rem] font-medium text-brand-700 transition-colors hover:bg-brand-50 sm:w-auto">
               Create account
             </Link>

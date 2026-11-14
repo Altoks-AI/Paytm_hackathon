@@ -50,10 +50,10 @@ export function AuthForm({ mode, action }: { mode: "login" | "signup"; action: (
 
       <div className="hidden border-l border-zinc-200 bg-zinc-50 lg:flex lg:items-center lg:px-16">
         <div className="max-w-[26rem]">
-          <p className="text-[1.75rem] font-semibold leading-[1.2] tracking-[-0.025em] text-zinc-900">One agent for WhatsApp, phone calls and your website chat.</p>
+          <p className="text-[1.75rem] font-semibold leading-[1.2] tracking-[-0.025em] text-zinc-900">One unified agent for customer engagement and marketing.</p>
           <ul className="mt-8 space-y-4 text-[0.9375rem] leading-relaxed text-zinc-600">
-            <li className="border-t border-zinc-200 pt-4">Answers from your own company details and FAQs.</li>
-            <li className="border-t border-zinc-200 pt-4">Books appointments and saves every lead.</li>
+            <li className="border-t border-zinc-200 pt-4">Answers customers on WhatsApp, voice, social and email.</li>
+            <li className="border-t border-zinc-200 pt-4">Posts on social media and runs WhatsApp and voice campaigns.</li>
             <li className="border-t border-zinc-200 pt-4">Hands over to your team when a customer asks for a person.</li>
           </ul>
         </div>
