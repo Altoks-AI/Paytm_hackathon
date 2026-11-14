@@ -149,7 +149,7 @@ export async function generateImage(input: { tenantId: string; prompt: string; m
   if (refs.length && !referenceSupport(m).images) return { ok: false, error: "This model doesn't support reference images." };
   if (m.maxImageRefs && refs.length > m.maxImageRefs) return { ok: false, error: `This model accepts at most ${m.maxImageRefs} reference image${m.maxImageRefs === 1 ? "" : "s"}.` };
   const aspectRatio = input.aspectRatio && m.aspectRatios.includes(input.aspectRatio) ? input.aspectRatio : undefined;
-  const safe = await checkGenerationRequest(prompt, "image");
+  const safe = await checkGenerationRequest(prompt, "image", refs.length);
   if (!safe.ok) return { ok: false, error: safe.reason };
   if (!(await chargeCredits(tenantId, "image_generation", { note: m.id }))) return { ok: false, error: OUT_OF_CREDITS };
   try {
@@ -204,7 +204,7 @@ export async function generateVideo(input: {
   if (input.aspectRatio && m.aspectRatios.includes(input.aspectRatio)) body.aspect_ratio = input.aspectRatio;
   if (input.duration && m.durations?.includes(input.duration)) body.duration = input.duration;
   if (input.resolution && m.resolutions?.includes(input.resolution)) body.resolution = input.resolution;
-  const safe = await checkGenerationRequest(prompt, "video");
+  const safe = await checkGenerationRequest(prompt, "video", refs.length);
   if (!safe.ok) return { ok: false, error: safe.reason };
   if (!(await chargeCredits(tenantId, "video_generation", { note: m.id }))) return { ok: false, error: OUT_OF_CREDITS };
   try {

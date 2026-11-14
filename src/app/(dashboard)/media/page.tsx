@@ -6,7 +6,7 @@ import { mediaFiles } from "@/db/schema";
 import { CREDIT_COSTS } from "@/lib/credits";
 import { appUrl, requireTenant } from "@/lib/tenant";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { CopyUrl, DeleteMedia, LocalDate, PendingPoller } from "./media-ui";
+import { CopyUrl, DeleteMedia, LocalDate, MediaPreview, PendingPoller } from "./media-ui";
 import { ThumbnailButton } from "./thumbnail";
 import { getThumbnailUrls } from "./actions";
 
@@ -76,11 +76,8 @@ async function MediaContent({ searchParams }: { searchParams: SP }) {
                       </div>
                     ) : r.status === "failed" ? (
                       <p className="px-4 text-center text-xs text-red-600">{r.error || "Generation failed"}</p>
-                    ) : r.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={src} alt={r.prompt ?? "Image"} loading="lazy" className="h-full w-full object-contain" />
                     ) : (
-                      <video src={src} poster={thumbs[r.id]} controls preload={thumbs[r.id] ? "none" : "metadata"} playsInline className="h-full w-full" />
+                      <MediaPreview kind={r.kind === "image" ? "image" : "video"} src={src} poster={thumbs[r.id]} alt={r.prompt ?? (r.kind === "image" ? "Image" : "Video")} />
                     )}
                   </div>
                   <div className="flex flex-1 flex-col gap-2 p-3">
