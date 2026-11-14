@@ -28,12 +28,18 @@ async function RedirectIfSignedIn() {
   return null;
 }
 
-// A real exchange, shown the way it appears in the product's conversation view.
-const transcript: { who: "customer" | "agent"; text: string }[] = [
-  { who: "customer", text: "Hi, is the clinic open on Saturday? I need a dental check-up." },
-  { who: "agent", text: "Yes, we're open Saturday 9 am to 2 pm. I have 10:30 and 12:15 free. Which works for you?" },
-  { who: "customer", text: "10:30. It's for Priya Nair." },
-  { who: "agent", text: "Booked, Priya. Saturday at 10:30 am for a dental check-up. We'll send a reminder the evening before." },
+// Illustrative activity for the hero: one agent working both sides of the business.
+const engagement: { channel: string; text: string; outcome: string }[] = [
+  { channel: "WhatsApp", text: "Dental check-up for Priya Nair, Saturday 10:30 am", outcome: "Booked" },
+  { channel: "Phone call", text: "Order for 2 items, payment link sent", outcome: "Paid" },
+  { channel: "Instagram DM", text: "Asked about pricing for a team of 12", outcome: "Lead saved" },
+  { channel: "Email", text: "Refund request with invoice attached", outcome: "Handed to team" },
+];
+
+const marketing: { name: string; where: string; status: string }[] = [
+  { name: "Festive offer", where: "WhatsApp campaign", status: "1,240 sent, 312 replies" },
+  { name: "Visit reminders", where: "Voice campaign", status: "86 of 200 called" },
+  { name: "New arrivals post", where: "Instagram, LinkedIn, X", status: "Scheduled 6:00 pm" },
 ];
 
 const channels: { icon: LucideIcon; title: string; body: string; points: string[] }[] = [
@@ -180,19 +186,47 @@ export default function Home() {
 
           <div className="rounded-[14px] border border-zinc-200 bg-zinc-50 p-2">
             <div className="flex flex-wrap items-center justify-between gap-x-3 px-3 py-2 text-[0.8125rem]">
-              <span className="font-medium text-zinc-900">+91 98470 12345</span>
-              <span className="text-zinc-500">WhatsApp, today 6:42 pm</span>
+              <span className="flex items-center gap-2 font-medium text-zinc-900">
+                <span className="h-2 w-2 rounded-full bg-brand-600" aria-hidden />
+                Your agent
+              </span>
+              <span className="text-zinc-500">Active on 9 channels</span>
             </div>
-            <div className="space-y-2.5 rounded-[10px] border border-zinc-200 bg-white p-3 sm:p-4">
-              {transcript.map((m, i) => (
-                <div key={i} className={`flex ${m.who === "agent" ? "justify-end" : "justify-start"}`}>
-                  <p className={`max-w-[88%] rounded-lg px-3.5 py-2.5 text-[0.9375rem] leading-snug ${m.who === "agent" ? "bg-brand-600 text-white" : "bg-zinc-100 text-zinc-900"}`}>{m.text}</p>
-                </div>
-              ))}
-              <p className="flex items-start gap-2 border-t border-zinc-100 pt-3 text-[0.8125rem] text-zinc-500">
-                <CalendarCheck size={15} strokeWidth={1.75} className="mt-px shrink-0 text-brand-600" aria-hidden />
-                Appointment booked for Sat 16 Nov, 10:30 am. Lead saved as Priya Nair.
-              </p>
+            <div className="space-y-2">
+              <div className="rounded-[10px] border border-zinc-200 bg-white p-3 sm:p-4">
+                <p className="flex items-center gap-2 text-[0.8125rem] font-medium text-zinc-500">
+                  <MessagesSquare size={15} strokeWidth={1.75} className="text-brand-600" aria-hidden />
+                  Customer engagement
+                </p>
+                <ul className="mt-2 divide-y divide-zinc-100">
+                  {engagement.map((e) => (
+                    <li key={e.channel} className="py-2.5 last:pb-0">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[0.9375rem] font-medium text-zinc-900">{e.channel}</span>
+                        <span className="shrink-0 text-[0.8125rem] font-medium text-brand-600">{e.outcome}</span>
+                      </div>
+                      <p className="mt-0.5 text-[0.875rem] leading-snug text-zinc-600">{e.text}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-[10px] border border-zinc-200 bg-white p-3 sm:p-4">
+                <p className="flex items-center gap-2 text-[0.8125rem] font-medium text-zinc-500">
+                  <Send size={15} strokeWidth={1.75} className="text-brand-600" aria-hidden />
+                  Marketing campaigns
+                </p>
+                <ul className="mt-2 divide-y divide-zinc-100">
+                  {marketing.map((m) => (
+                    <li key={m.name} className="py-2.5 last:pb-0">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[0.9375rem] font-medium text-zinc-900">{m.name}</span>
+                        <span className="shrink-0 text-[0.8125rem] font-medium text-brand-600">{m.status}</span>
+                      </div>
+                      <p className="mt-0.5 text-[0.875rem] leading-snug text-zinc-600">{m.where}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         </section>
