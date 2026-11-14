@@ -37,7 +37,7 @@ export async function generatePostText(input: { topic: string; platforms: string
     "Tone: professional, clear and credible — the way a reputable company speaks on LinkedIn. Open with a strong first line, short paragraphs, a clear call to action, and 3-5 relevant hashtags at the end. Minimal or no emojis.",
     "Only state facts found in the company details or the topic; never invent statistics, prices, awards, customer names or guarantees. Nothing offensive, political, misleading or disparaging of competitors.",
     wantsTitle
-      ? 'Return ONLY a JSON object: {"title": "...", "description": "..."}. The title is for the video: at most 90 characters, specific and factual, no clickbait, no emojis, no hashtags, no ALL CAPS. The description is the post text described above, with no markdown formatting.'
+      ? "Return exactly this format and nothing else:\nTITLE: <the video title on one line>\nDESCRIPTION:\n<the post text described above>\nThe title is at most 90 characters, specific and factual, no clickbait, no emojis, no hashtags, no ALL CAPS. No markdown formatting anywhere."
       : "Return ONLY the post text — no preamble, no quotes, no markdown formatting.",
   ]
     .filter(Boolean)
@@ -48,14 +48,22 @@ export async function generatePostText(input: { topic: string; platforms: string
     let text = raw;
     let title: string | undefined;
     if (wantsTitle) {
-      // Parse defensively: if the model ignored the JSON instruction, treat the whole reply as the description.
-      try {
-        const j = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "");
-        if (typeof j.description === "string" && j.description.trim()) text = j.description;
-        if (typeof j.title === "string") title = [...j.title.trim()].slice(0, 100).join("") || undefined;
-      } catch {
-        /* keep raw text */
+      // Models don't reliably follow one format, so accept labelled text, JSON (even with raw newlines), then fall back.
+      const clean = (v: string) => v.replace(/\x5cn/g, "\n").replace(/\x5c"/g, '"').replace(/^[\s"'*#]+|[\s"'*,]+$/g, "");
+      const body = raw.replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const labelled = body.match(/^[\s*#]*title[\s*]*[:\-][\s*]*(.+?)\s*\n+[\s*#]*description[\s*]*[:\-]?[\s*]*([\s\S]+)$/i);
+      const jsonTitle = body.match(/"title"\s*:\s*"((?:[^"\x5c]|\x5c.)*)"/i);
+      const jsonDesc = body.match(/"description"\s*:\s*"([\s\S]*?)"\s*,?\s*(?:"title"\s*:[\s\S]*)?\}?\s*$/i) ?? body.match(/"description"\s*:\s*"([\s\S]*)$/i);
+      if (labelled) {
+        title = clean(labelled[1]);
+        text = labelled[2].trim();
+      } else if (jsonTitle || jsonDesc) {
+        if (jsonTitle) title = clean(jsonTitle[1]);
+        if (jsonDesc && clean(jsonDesc[1])) text = clean(jsonDesc[1]);
       }
+      // Never leave the title empty: use the description's first line, without hashtags.
+      if (!title) title = (text.split(/\n|(?<=[.!?])\s/)[0] ?? "").replace(/#\S+/g, "").trim();
+      title = [...title].slice(0, 100).join("").trim() || undefined;
     }
     text = text.replace(/^["']|["']$/g, "").trim();
     if ([...text].length > max) text = [...text].slice(0, max).join("");
