@@ -57,6 +57,15 @@ const channels: { icon: LucideIcon; title: string; body: string; points: string[
   },
 ];
 
+const moreChannels: { title: string; body: string }[] = [
+  { title: "Instagram", body: "DMs and comments" },
+  { title: "Facebook", body: "Messenger and comments" },
+  { title: "X (Twitter)", body: "DMs and replies" },
+  { title: "LinkedIn", body: "Messages and comments" },
+  { title: "YouTube", body: "Comments and replies" },
+  { title: "Email", body: "Inbox and outreach" },
+];
+
 const abilities: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: CalendarCheck, title: "Books appointments", body: "Offers times, confirms the booking, and lets customers check or cancel later." },
   { icon: UserPlus, title: "Saves every lead", body: "Names, numbers and what each person asked about go straight into your leads list." },
@@ -205,9 +214,14 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <p className="mt-6 text-[0.9375rem] leading-relaxed text-zinc-600">
-              Also on Instagram, Facebook, X, LinkedIn, YouTube and email: DMs, comments and replies, handled by the same agent.
-            </p>
+            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+              {moreChannels.map((c) => (
+                <div key={c.title} className="rounded-[10px] border border-zinc-200 bg-white px-5 py-4 sm:px-6">
+                  <h3 className="font-semibold tracking-[-0.01em] text-zinc-900">{c.title}</h3>
+                  <p className="mt-1 text-[0.9375rem] text-zinc-600">{c.body}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
